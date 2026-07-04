@@ -18,7 +18,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     if (useSqlite)
         options.UseSqlite($"Data Source={sqlitePath}");
     else
-        options.UseNpgsql(ConvertPostgresUrl(databaseUrl));
+    {
+        // Neon Postgres — build Npgsql connection string from env vars or URL
+        var dbHost = Environment.GetEnvironmentVariable("DB_HOST") ?? "ep-sparkling-queen-asx70wvf.c-4.eu-central-1.aws.neon.tech";
+        var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "neondb";
+        var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "neondb_owner";
+        var dbPass = Environment.GetEnvironmentVariable("DB_PASS") ?? "npg_YKCa0AqHU7dE";
+        var cs = $"Host={dbHost};Port=5432;Database={dbName};Username={dbUser};Password={dbPass};SSL Mode=Require;Trust Server Certificate=true";
+        options.UseNpgsql(cs);
+    }
 });
 
 builder.Services.AddCors(options =>
@@ -123,24 +131,3 @@ app.MapControllers();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 app.Run($"http://0.0.0.0:{port}");
-
-// Convert postgresql:// style URL to Npgsql keyword connection string.
-static string ConvertPostgresUrl(string url)
-{
-    var uri = new Uri(url);
-    var userInfo = uri.UserInfo.Split(':', 2);
-    var db = uri.AbsolutePath.TrimStart('/');
-    var portStr = uri.Port > 0 ? uri.Port : 5432;
-
-    var cs = $"Host={uri.Host};Port={portStr};Database={db};Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo.Length > 1 ? userInfo[1] : "")};SSL Mode=Require;Trust Server Certificate=true";
-
-    // Append any query params like sslmode=require
-    if (!string.IsNullOrEmpty(uri.Query))
-    {
-        var q = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        if (q["sslmode"] is "require" or "Require")
-            cs = cs.Replace("SSL Mode=Require", "SSL Mode=Require");
-    }
-
-    return cs;
-}
