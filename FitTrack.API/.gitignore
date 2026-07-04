@@ -1,0 +1,5 @@
+
+# Local SQLite database
+fittrack.db
+fittrack.db-shm
+fittrack.db-wal

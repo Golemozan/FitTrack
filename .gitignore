@@ -1,0 +1,8 @@
+fittrack.db
+fittrack.db-shm
+fittrack.db-wal
+bin/
+obj/
+node_modules/
+dist/
+.env
