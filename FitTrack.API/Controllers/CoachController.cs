@@ -209,6 +209,52 @@ public class CoachController : ControllerBase
                 ["required"] = new JsonArray { "mood", "energy", "hunger" },
             },
         },
+        new JsonObject
+        {
+            ["name"] = "list_meals",
+            ["description"] = "Bugünün yemek listesini getir. Ozan 'ne yedim', 'listele', 'neler var' derse veya bir şeyi silmeden/düzeltmeden önce çağır. Dönüş: her öğünün ID, ad, gram, kalori, makro ve öğün tipi.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject(),
+                ["required"] = new JsonArray(),
+            },
+        },
+        new JsonObject
+        {
+            ["name"] = "delete_meal",
+            ["description"] = "Öğünü ID'sine göre sil. Ozan 'sil', 'çıkar', 'kaldır', 'yanlış oldu' derse KULLAN. ÖNCE list_meals ile ID'leri gör, SONRA bununla sil. BİRDEN FAZLA öğünü silmen gerekiyorsa HER BİRİ İÇİN AYRI çağır.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["mealId"] = new JsonObject { ["type"] = "string", ["description"] = "Silinecek öğünün GUID ID'si (list_meals'ten al)" },
+                },
+                ["required"] = new JsonArray { "mealId" },
+            },
+        },
+        new JsonObject
+        {
+            ["name"] = "edit_meal",
+            ["description"] = "Var olan öğünü ID'sine göre DÜZENLE. Ozan 'şu yanlış', 'düzelt', 'değiştir', 'aslında ... gramdı' derse KULLAN. YENİ KAYIT EKLEME — mevcut kaydı GÜNCELLE. ÖNCE list_meals ile ID'yi bul, SONRA bununla güncelle. TÜM alanları doldur (sadece değişenleri değil).",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["mealId"] = new JsonObject { ["type"] = "string", ["description"] = "Düzenlenecek öğünün GUID ID'si (list_meals'ten al)" },
+                    ["foodName"] = new JsonObject { ["type"] = "string" },
+                    ["grams"] = new JsonObject { ["type"] = "number" },
+                    ["calories"] = new JsonObject { ["type"] = "number" },
+                    ["protein"] = new JsonObject { ["type"] = "number" },
+                    ["carbs"] = new JsonObject { ["type"] = "number" },
+                    ["fat"] = new JsonObject { ["type"] = "number" },
+                    ["mealType"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "Breakfast", "Lunch", "Dinner", "Snack" } },
+                },
+                ["required"] = new JsonArray { "mealId", "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType" },
+            },
+        },
     };
 
     // Execute one tool call → (human-readable result, invalidation domain, isError).
@@ -270,6 +316,53 @@ public class CoachController : ControllerBase
                     _db.CheckIns.Add(entry);
                     await _db.SaveChangesAsync();
                     return ($"Check-in kaydedildi (ruh {entry.Mood}, enerji {entry.Energy}, açlık {entry.Hunger}).", "checkin", false);
+                }
+                case "list_meals":
+                {
+                    var day = DateTime.Now.Date;
+                    var meals = await _db.MealEntries
+                        .Where(m => m.LoggedAt >= day && m.LoggedAt < day.AddDays(1))
+                        .OrderBy(m => m.LoggedAt)
+                        .ToListAsync();
+                    if (meals.Count == 0)
+                        return ("Bugün henüz yemek kaydı yok.", null, false);
+                    var lines = meals.Select(m =>
+                        $"ID:{m.Id} [{m.MealType}] {m.FoodName} {m.Grams:0}g = {m.Calories:0} kcal (P{m.Protein:0}/K{m.Carbs:0}/Y{m.Fat:0}) {m.LoggedAt:HH:mm}");
+                    var total = $"TOPLAM: {meals.Sum(m => m.Calories):0} kcal, P{meals.Sum(m => m.Protein):0} K{meals.Sum(m => m.Carbs):0} Y{meals.Sum(m => m.Fat):0}";
+                    return ($"{string.Join("\n", lines)}\n{total}", null, false);
+                }
+                case "delete_meal":
+                {
+                    var mealId = Str(input, "mealId");
+                    if (!Guid.TryParse(mealId, out var gid))
+                        return ($"Geçersiz ID: {mealId}. Önce list_meals ile ID'leri gör.", null, true);
+                    var meal = await _db.MealEntries.FindAsync(gid);
+                    if (meal is null)
+                        return ($"ID:{mealId} bulunamadı. Silinmiş olabilir ya da başka bir güne ait.", null, true);
+                    var desc = $"{meal.FoodName} {meal.Grams:0}g ({meal.Calories:0} kcal)";
+                    _db.MealEntries.Remove(meal);
+                    await _db.SaveChangesAsync();
+                    return ($"Silindi: {desc}.", "nutrition", false);
+                }
+                case "edit_meal":
+                {
+                    var mealId = Str(input, "mealId");
+                    if (!Guid.TryParse(mealId, out var gid))
+                        return ($"Geçersiz ID: {mealId}. Önce list_meals ile ID'leri gör.", null, true);
+                    var meal = await _db.MealEntries.FindAsync(gid);
+                    if (meal is null)
+                        return ($"ID:{mealId} bulunamadı. Düzenlenemez.", null, true);
+                    var oldDesc = $"{meal.FoodName} {meal.Grams:0}g ({meal.Calories:0} kcal)";
+                    meal.FoodName = Str(input, "foodName");
+                    meal.Grams = Num(input, "grams");
+                    meal.Calories = Num(input, "calories");
+                    meal.Protein = Num(input, "protein");
+                    meal.Carbs = Num(input, "carbs");
+                    meal.Fat = Num(input, "fat");
+                    meal.MealType = Enum.TryParse<MealType>(Str(input, "mealType"), out var mt) ? mt : MealType.Snack;
+                    await _db.SaveChangesAsync();
+                    var newDesc = $"{meal.FoodName} {meal.Grams:0}g = {meal.Calories:0} kcal (P{meal.Protein:0}/K{meal.Carbs:0}/Y{meal.Fat:0})";
+                    return ($"Güncellendi: [{oldDesc}] → [{newDesc}].", "nutrition", false);
                 }
                 default:
                     return ($"Bilinmeyen araç: {name}", null, true);
@@ -336,6 +429,15 @@ public class CoachController : ControllerBase
         sb.AppendLine("== ARAÇLAR (önemli) ==");
         sb.AppendLine("Ozan bir şey yediğini söylediğinde `log_food` aracıyla besini KENDİN ekle — onay isteme, direkt kaydet. Birden fazla besin varsa her biri için ayrı çağır. Makroyu bilmiyorsan besin ve gramına göre tahmin et.");
         sb.AppendLine("Kilo söylerse `log_weight`, ruh hali/enerji/açlık belirtirse `log_checkin` çağır. Kaydettikten sonra ne eklediğini kısaca teyit et ve yorumla (hedefe etkisi vb.).");
+        sb.AppendLine();
+        sb.AppendLine("== DÜZELTME/SİLME (ÇOK ÖNEMLİ) ==");
+        sb.AppendLine("Ozan 'sil', 'çıkar', 'kaldır', 'yanlış oldu', 'yanlış yazdım', 'düzelt', 'değiştir', 'aslında', 'şu değil de', 'gramı yanlış', 'öğünü değiştir' gibi bir şey söylerse:");
+        sb.AppendLine("1. ASLA `log_food` çağırma — bu yeni kayıt ekler, üstüne ekleme yapar!");
+        sb.AppendLine("2. ÖNCE `list_meals` çağır, ID'leri gör.");
+        sb.AppendLine("3. Silme isteğiyse `delete_meal` ile ID'ye göre sil.");
+        sb.AppendLine("4. Düzeltme isteğiyse `edit_meal` ile ID'ye göre güncelle (TÜM alanları doldur).");
+        sb.AppendLine("5. Birden fazla öğün silinecekse HER BİRİ İÇİN ayrı `delete_meal` çağır.");
+        sb.AppendLine("6. İşlem sonrası kısaca teyit et (silinen/düzeltilen ne, yeni durum ne).");
         sb.AppendLine($"Şu anki saat: {DateTime.Now:HH:mm}. Öğünü saate göre seç (sabah=Breakfast, öğle=Lunch, akşam=Dinner, ara=Snack) ya da Ozan söylerse ona göre.");
         sb.AppendLine();
         sb.AppendLine("== GÜNCEL VERİLER (bugün) ==");

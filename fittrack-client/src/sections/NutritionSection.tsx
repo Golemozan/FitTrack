@@ -149,7 +149,7 @@ export default function NutritionSection() {
               const t = sum(entries);
               const isOpen = !collapsed.has(type);
               return (
-                <Card key={type} className="p-0 overflow-hidden">
+                <Card key={type} className="flex flex-col p-0">
                   <button
                     onClick={() => toggle(type)}
                     className="flex w-full items-center justify-between gap-2 px-4 py-3"
@@ -190,41 +190,36 @@ export default function NutritionSection() {
                           {entries.map((m) => (
                             <li
                               key={m.id}
-                              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"
+                              className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-white/5"
                             >
                               <button
                                 onClick={() => openEdit(m)}
-                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                                 aria-label={`${m.foodName} düzenle`}
                               >
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-medium capitalize">{m.foodName}</span>
-                                    <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-neutral-300">
-                                      {Math.round(m.grams)}g
-                                    </span>
-                                  </div>
-                                  <div className="mt-0.5 text-[11px] tabular-nums text-neutral-400">
-                                    <span className="text-pro">P {Math.round(m.protein)}</span>
-                                    <span className="text-carb"> · K {Math.round(m.carbs)}</span>
-                                    <span className="text-fat"> · Y {Math.round(m.fat)}</span>
+                                  <span className="block truncate text-sm font-medium capitalize">{m.foodName}</span>
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0 text-[11px] tabular-nums text-neutral-400">
+                                    <span>{Math.round(m.grams)}g</span>
+                                    <span className="text-pro">P{Math.round(m.protein)}</span>
+                                    <span className="text-carb">K{Math.round(m.carbs)}</span>
+                                    <span className="text-fat">Y{Math.round(m.fat)}</span>
                                   </div>
                                 </div>
-                                <Pencil
-                                  size={13}
-                                  className="shrink-0 text-neutral-400 opacity-0 transition-opacity group-hover:opacity-100"
-                                />
                               </button>
-                              <span className="num shrink-0 text-base text-neutral-200">
+                              <Pencil
+                                size={12}
+                                className="hidden shrink-0 text-neutral-400 group-hover:block"
+                              />
+                              <span className="num shrink-0 text-sm text-neutral-200 tabular-nums">
                                 {Math.round(m.calories)}
-                                <span className="ml-0.5 text-[10px] font-normal text-neutral-400">kcal</span>
                               </span>
                               <button
                                 onClick={() => deleteMeal.mutate(m.id)}
                                 className="shrink-0 text-neutral-400 hover:text-gain"
                                 aria-label="Sil"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={14} />
                               </button>
                             </li>
                           ))}
