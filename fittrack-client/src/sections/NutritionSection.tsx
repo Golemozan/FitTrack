@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, Pencil, Plus, Trash2, UtensilsCrossed } from "lucide-react";
-import { useDeleteMeal, useTodayMeals } from "../hooks/useNutrition";
+import { ChevronDown, History, Pencil, Plus, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { useDayMeals, useDeleteMeal, useTodayMeals } from "../hooks/useNutrition";
 import { useGoals } from "../hooks/useGoals";
 import MacroRing from "../components/MacroRing";
 import AddFoodSheet from "../components/AddFoodSheet";
+import CalorieHistory from "../components/CalorieHistory";
 import { Card, EmptyState, ProgressBar, Skeleton } from "../components/ui";
 import { SectionHeader } from "../components/SectionHeader";
 import type { MealEntry, MealType } from "../types";
@@ -34,10 +35,15 @@ export default function NutritionSection() {
   const goals = useGoals();
   const deleteMeal = useDeleteMeal();
 
+  const [tab, setTab] = useState<"today" | "history">("today");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMeal, setSheetMeal] = useState<MealType>("Breakfast");
   const [editEntry, setEditEntry] = useState<MealEntry | null>(null);
   const [collapsed, setCollapsed] = useState<Set<MealType>>(new Set());
+  const [histDays, setHistDays] = useState(30);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const dayMeals = useDayMeals(selectedDate);
 
   const totals = useMemo(() => {
     const all = today.data ? Object.values(today.data).flat() : [];
@@ -79,12 +85,36 @@ export default function NutritionSection() {
 
   return (
     <section id="beslenme" className="scroll-mt-24">
-      <SectionHeader
-        icon={UtensilsCrossed}
-        title="Beslenme"
-        action={{ label: "Yemek Ekle", onClick: () => openSheet("Breakfast") }}
-      />
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <SectionHeader
+          icon={UtensilsCrossed}
+          title="Beslenme"
+          action={tab === "today" ? { label: "Yemek Ekle", onClick: () => openSheet("Breakfast") } : undefined}
+        />
+        <div className="flex gap-1 rounded-xl border border-hair bg-white/[0.04] p-1">
+          <button
+            onClick={() => setTab("today")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "today" ? "bg-accent text-accentink" : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            Bugün
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "history" ? "bg-accent text-accentink" : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            <History size={14} />
+            Geçmiş
+          </button>
+        </div>
+      </div>
 
+      {tab === "today" ? (
+        <>
+        {/* ---- TODAY VIEW ---- */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* MACRO SUMMARY */}
         <Card className="self-start lg:col-span-1">
@@ -240,7 +270,105 @@ export default function NutritionSection() {
         </div>
       </div>
 
-      <AddFoodSheet open={sheetOpen} defaultMeal={sheetMeal} editEntry={editEntry} onClose={closeSheet} />
+      {/* ---- /TODAY ---- */}
+      </>
+      ) : (
+        /* ---- HISTORY VIEW ---- */
+        <div className="space-y-4">
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-neutral-200">Kalori Geçmişi</h3>
+              <div className="flex gap-1">
+                {[7, 30, 60].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setHistDays(r)}
+                    className={`rounded-lg px-2 py-1 text-xs font-medium ${
+                      histDays === r ? "bg-accent text-accentink" : "bg-card2 text-neutral-400"
+                    }`}
+                  >
+                    {r} gün
+                  </button>
+                ))}
+              </div>
+            </div>
+            <CalorieHistory days={histDays} onSelectDay={setSelectedDate} selectedDate={selectedDate} />
+          </Card>
+
+          {selectedDate && (
+            <Card>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-neutral-200">
+                  {new Date(selectedDate).toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })}
+                </h3>
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="text-neutral-400 hover:text-white"
+                  aria-label="Kapat"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              {dayMeals.isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {MEALS.map(({ tr, type }) => {
+                    const entries = (dayMeals.data?.[type] ?? []) as MealEntry[];
+                    const t = sum(entries);
+                    return (
+                      <div key={type} className="rounded-xl border border-hair bg-white/[0.03] p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-semibold">{tr}</span>
+                          {entries.length > 0 && (
+                            <span className="num text-sm text-neutral-200">{Math.round(t.calories)} kcal</span>
+                          )}
+                        </div>
+                        {entries.length > 0 ? (
+                          <ul className="space-y-1">
+                            {entries.map((m) => (
+                              <li
+                                key={m.id}
+                                className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-white/5"
+                              >
+                                <button
+                                  onClick={() => openEdit(m)}
+                                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                >
+                                  <span className="truncate text-sm font-medium">{m.foodName}</span>
+                                  <span className="text-xs text-neutral-400">{Math.round(m.grams)}g</span>
+                                </button>
+                                <span className="num shrink-0 text-sm text-neutral-200 tabular-nums">
+                                  {Math.round(m.calories)}
+                                </span>
+                                <button
+                                  onClick={() => deleteMeal.mutate(m.id)}
+                                  className="shrink-0 text-neutral-400 hover:text-gain"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="py-2 text-sm text-neutral-500">Boş</p>
+                        )}
+                        <button
+                          onClick={() => { setSheetMeal(type); setSheetOpen(true); }}
+                          className="mt-1 flex items-center gap-1 px-1 text-sm font-medium text-accent hover:underline"
+                        >
+                          <Plus size={14} /> Ekle
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          )}
+        </div>
+      )}
+      <AddFoodSheet open={sheetOpen} defaultMeal={sheetMeal} editEntry={editEntry} logDate={selectedDate} onClose={closeSheet} />
     </section>
-  );
+    );
 }

@@ -77,6 +77,7 @@ export interface LogFoodRequest {
   carbs: number;
   fat: number;
   mealType: MealType;
+  logDate?: string; // YYYY-MM-DD — geçmiş güne ekleme
 }
 
 export interface NutritionSummary {
@@ -88,6 +89,21 @@ export interface NutritionSummary {
 
 /** /api/nutrition/today → entries keyed by meal type. */
 export type TodayMeals = Partial<Record<MealType, MealEntry[]>>;
+
+// ---- Nutrition History ----
+
+export interface DailyNutritionSummary {
+  date: string;
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  mealCount: number;
+}
+
+export interface NutritionStreak {
+  days: number;
+}
 
 // ---- Goals DTO ----
 

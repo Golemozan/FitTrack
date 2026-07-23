@@ -12,7 +12,7 @@ namespace FitTrack.API.Controllers;
 [Route("api/coach")]
 public class CoachController : ControllerBase
 {
-    private const string Model = "claude-haiku-4-5-20251001";
+    private const string Model = "claude-sonnet-5";
     private const string AnthropicUrl = "https://api.anthropic.com/v1/messages";
 
     private readonly AppDbContext _db;
@@ -79,7 +79,7 @@ public class CoachController : ControllerBase
             var payload = new JsonObject
             {
                 ["model"] = Model,
-                ["max_tokens"] = 1024,
+                ["max_tokens"] = 4096,
                 ["system"] = system,
                 ["tools"] = BuildTools(),
                 ["messages"] = JsonNode.Parse(messages.ToJsonString()),
@@ -159,7 +159,7 @@ public class CoachController : ControllerBase
         new JsonObject
         {
             ["name"] = "log_food",
-            ["description"] = "Ozan bir şey yediğini söylediğinde besini günlüğe ekle. Makroları bilmiyorsan besin adı ve gramına göre en iyi beslenme tahminini yap. calories/protein/carbs/fat VERİLEN TOPLAM MİKTAR için (100g başına değil). Öğünü sadate/bağlama göre seç.",
+            ["description"] = "Ozan bir şey yediğinde besini günlüğe ekle. Makro tahmini için sistem promptundaki BESLENME REFERANSI tablosunu kullan. calories/protein/carbs/fat TOPLAM tüketilen miktar için olmalı (100g başına değil). date: YYYY-MM-DD formatında, boşsa bugün. Ozan 'dün', 'önceki gün', '3 gün önce' gibi geçmiş zaman belirtirse date'i ona göre ata.",
             ["input_schema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -172,6 +172,7 @@ public class CoachController : ControllerBase
                     ["carbs"] = new JsonObject { ["type"] = "number" },
                     ["fat"] = new JsonObject { ["type"] = "number" },
                     ["mealType"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "Breakfast", "Lunch", "Dinner", "Snack" } },
+                    ["date"] = new JsonObject { ["type"] = "string", ["description"] = "YYYY-MM-DD formatında tarih. Boşsa bugün. Geçmiş gün için kullan." },
                 },
                 ["required"] = new JsonArray { "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType" },
             },
@@ -212,11 +213,14 @@ public class CoachController : ControllerBase
         new JsonObject
         {
             ["name"] = "list_meals",
-            ["description"] = "Bugünün yemek listesini getir. Ozan 'ne yedim', 'listele', 'neler var' derse veya bir şeyi silmeden/düzeltmeden önce çağır. Dönüş: her öğünün ID, ad, gram, kalori, makro ve öğün tipi.",
+            ["description"] = "Yemek listesini getir. Ozan 'ne yedim', 'listele', 'neler var' derse veya bir şeyi silmeden/düzeltmeden önce çağır. date: YYYY-MM-DD formatında, boşsa bugün. Geçmiş günler için date belirt.",
             ["input_schema"] = new JsonObject
             {
                 ["type"] = "object",
-                ["properties"] = new JsonObject(),
+                ["properties"] = new JsonObject
+                {
+                    ["date"] = new JsonObject { ["type"] = "string", ["description"] = "YYYY-MM-DD formatında tarih. Boşsa bugün." },
+                },
                 ["required"] = new JsonArray(),
             },
         },
@@ -255,6 +259,20 @@ public class CoachController : ControllerBase
                 ["required"] = new JsonArray { "mealId", "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType" },
             },
         },
+        new JsonObject
+        {
+            ["name"] = "get_nutrition_history",
+            ["description"] = "Son N günün günlük kalori/makro özetini getir. Ozan 'bu hafta nasıldı', 'son 1 ayda ne kadar yedim', 'trend nasıl', 'geçmişe bak' gibi sorular sorduğunda KULLAN. Her gün için tarih, toplam kalori, protein, karbonhidrat, yağ ve öğün sayısı döner.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["days"] = new JsonObject { ["type"] = "integer", ["description"] = "Kaç günlük geçmiş (varsayılan 7, maksimum 90)" },
+                },
+                ["required"] = new JsonArray(),
+            },
+        },
     };
 
     // Execute one tool call → (human-readable result, invalidation domain, isError).
@@ -266,6 +284,7 @@ public class CoachController : ControllerBase
             {
                 case "log_food":
                 {
+                    var date = ParseDate(Str(input, "date")) ?? DateTime.Now;
                     var entry = new MealEntry
                     {
                         Id = Guid.NewGuid(),
@@ -276,11 +295,12 @@ public class CoachController : ControllerBase
                         Carbs = Num(input, "carbs"),
                         Fat = Num(input, "fat"),
                         MealType = Enum.TryParse<MealType>(Str(input, "mealType"), out var mt) ? mt : MealType.Snack,
-                        LoggedAt = DateTime.Now,
+                        LoggedAt = date,
                     };
                     _db.MealEntries.Add(entry);
                     await _db.SaveChangesAsync();
-                    return ($"Eklendi: {entry.FoodName} {entry.Grams:0}g, {entry.Calories:0} kcal (P{entry.Protein:0}/K{entry.Carbs:0}/Y{entry.Fat:0}).", "nutrition", false);
+                    var dateLabel = date.Date == DateTime.Now.Date ? "" : $" ({date:dd.MM.yyyy})";
+                    return ($"Eklendi{dateLabel}: {entry.FoodName} {entry.Grams:0}g, {entry.Calories:0} kcal (P{entry.Protein:0}/K{entry.Carbs:0}/Y{entry.Fat:0}).", "nutrition", false);
                 }
                 case "log_weight":
                 {
@@ -319,17 +339,19 @@ public class CoachController : ControllerBase
                 }
                 case "list_meals":
                 {
-                    var day = DateTime.Now.Date;
+                    var date = ParseDate(Str(input, "date")) ?? DateTime.Now;
+                    var day = date.Date;
                     var meals = await _db.MealEntries
                         .Where(m => m.LoggedAt >= day && m.LoggedAt < day.AddDays(1))
                         .OrderBy(m => m.LoggedAt)
                         .ToListAsync();
+                    var dateLabel = day == DateTime.Now.Date ? "Bugün" : day.ToString("dd.MM.yyyy");
                     if (meals.Count == 0)
-                        return ("Bugün henüz yemek kaydı yok.", null, false);
+                        return ($"{dateLabel} yemek kaydı yok.", null, false);
                     var lines = meals.Select(m =>
                         $"ID:{m.Id} [{m.MealType}] {m.FoodName} {m.Grams:0}g = {m.Calories:0} kcal (P{m.Protein:0}/K{m.Carbs:0}/Y{m.Fat:0}) {m.LoggedAt:HH:mm}");
                     var total = $"TOPLAM: {meals.Sum(m => m.Calories):0} kcal, P{meals.Sum(m => m.Protein):0} K{meals.Sum(m => m.Carbs):0} Y{meals.Sum(m => m.Fat):0}";
-                    return ($"{string.Join("\n", lines)}\n{total}", null, false);
+                    return ($"{dateLabel}:\n{string.Join("\n", lines)}\n{total}", null, false);
                 }
                 case "delete_meal":
                 {
@@ -364,6 +386,34 @@ public class CoachController : ControllerBase
                     var newDesc = $"{meal.FoodName} {meal.Grams:0}g = {meal.Calories:0} kcal (P{meal.Protein:0}/K{meal.Carbs:0}/Y{meal.Fat:0})";
                     return ($"Güncellendi: [{oldDesc}] → [{newDesc}].", "nutrition", false);
                 }
+                case "get_nutrition_history":
+                {
+                    var days = (int)Math.Clamp(Num(input, "days"), 1, 90);
+                    if (days == 0) days = 7;
+                    var since = DateTime.Now.Date.AddDays(-days + 1);
+                    var entries = await _db.MealEntries
+                        .Where(m => m.LoggedAt >= since)
+                        .ToListAsync();
+                    var daily = entries
+                        .GroupBy(m => m.LoggedAt.Date)
+                        .OrderBy(g => g.Key)
+                        .Select(g => new
+                        {
+                            Date = g.Key.ToString("dd.MM.yyyy"),
+                            Calories = g.Sum(m => m.Calories),
+                            Protein = g.Sum(m => m.Protein),
+                            Carbs = g.Sum(m => m.Carbs),
+                            Fat = g.Sum(m => m.Fat),
+                            Count = g.Count(),
+                        })
+                        .ToList();
+                    if (daily.Count == 0)
+                        return ($"Son {days} günde yemek kaydı yok.", null, false);
+                    var lines = daily.Select(d =>
+                        $"{d.Date}: {d.Calories:0} kcal, P{d.Protein:0} K{d.Carbs:0} Y{d.Fat:0} ({d.Count} öğün)");
+                    var avg = daily.Average(d => d.Calories);
+                    return ($"Son {days} gün:\n{string.Join("\n", lines)}\n\nGünlük ortalama: {avg:0} kcal.", null, false);
+                }
                 default:
                     return ($"Bilinmeyen araç: {name}", null, true);
             }
@@ -390,6 +440,14 @@ public class CoachController : ControllerBase
         try { return v.GetValue<string>(); } catch { return v.ToString(); }
     }
 
+    private static DateTime? ParseDate(string dateStr)
+    {
+        if (string.IsNullOrWhiteSpace(dateStr)) return null;
+        if (DateTime.TryParseExact(dateStr.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+            return d;
+        return null;
+    }
+
     // Assemble a compact live snapshot of Ozan's day for the coach's system prompt.
     private async Task<string> BuildSystemPromptAsync()
     {
@@ -405,6 +463,23 @@ public class CoachController : ControllerBase
         var pro = todayMeals.Sum(m => m.Protein);
         var carb = todayMeals.Sum(m => m.Carbs);
         var fat = todayMeals.Sum(m => m.Fat);
+
+        // Last 7 and 14 days for weekly comparison
+        var weekAgo = day.AddDays(-7);
+        var twoWeeksAgo = day.AddDays(-14);
+        var last7Days = await _db.MealEntries
+            .Where(m => m.LoggedAt >= weekAgo && m.LoggedAt < day)
+            .ToListAsync();
+        var prev7Days = await _db.MealEntries
+            .Where(m => m.LoggedAt >= twoWeeksAgo && m.LoggedAt < weekAgo)
+            .ToListAsync();
+        var thisWeekAvg = last7Days.Count > 0 ? last7Days.Sum(m => m.Calories) / 7.0 : 0;
+        var prevWeekAvg = prev7Days.Count > 0 ? prev7Days.Sum(m => m.Calories) / 7.0 : 0;
+        var weeklyHistory = last7Days
+            .GroupBy(m => m.LoggedAt.Date)
+            .OrderBy(g => g.Key)
+            .Select(g => $"{g.Key:dd.MM}: {g.Sum(m => m.Calories):0} kcal (P{g.Sum(m => m.Protein):0}/K{g.Sum(m => m.Carbs):0}/Y{g.Sum(m => m.Fat):0})")
+            .ToList();
 
         var weights = await _db.WeightLogs.OrderBy(w => w.LoggedAt).ToListAsync();
         double? currentW = weights.Count > 0 ? weights[^1].WeightKg : null;
@@ -422,24 +497,97 @@ public class CoachController : ControllerBase
             .ToListAsync();
 
         var sb = new StringBuilder();
-        sb.AppendLine("Sen Ozan'ın kişisel sağlık ve fitness koçusun. Adın Koç.");
-        sb.AppendLine("Tarz: Türkçe. AZ VE ÖZ konuş — maksimum 3 cümle. Soru sorma, lafı uzatma, motive edici konuşmalar yapma. SADECE veriye dayalı bilgi ver.");
-        sb.AppendLine("Emoji kullanma. 'Harika', 'süper', 'Harikasın' gibi kelimeler kullanma.");
+
+        // === [1] KİMLİK + TARZ ===
+        sb.AppendLine("Sen Koç — Ozan'ın kişisel sağlık ve fitness koçusun.");
+        sb.AppendLine("Beslenme biyokimyası, egzersiz fizyolojisi ve spor bilimlerinde uzmansın.");
         sb.AppendLine();
-        sb.AppendLine("== ARAÇLAR (önemli) ==");
-        sb.AppendLine("Ozan bir şey yediğini söylediğinde `log_food` aracıyla besini KENDİN ekle — onay isteme, direkt kaydet. Birden fazla besin varsa her biri için ayrı çağır. Makroyu bilmiyorsan besin ve gramına göre tahmin et.");
-        sb.AppendLine("Kilo söylerse `log_weight`, ruh hali/enerji/açlık belirtirse `log_checkin` çağır. Kaydettikten sonra ne eklediğini kısaca teyit et ve yorumla (hedefe etkisi vb.).");
+        sb.AppendLine("DAVRANIŞ KURALLARI (kesinlikle uyulacak):");
+        sb.AppendLine("- Türkçe konuş. Doğal konuşma dili, insan gibi.");
+        sb.AppendLine("- SELAMLAŞMA YOK. \"Selam Ozan\", \"Ben Koç\" gibi giriş cümleleri KULLANMA. Direkt konuya gir.");
+        sb.AppendLine("- Emoji kullanma.");
+        sb.AppendLine("- Aşırı övgü kelimeleri (harika, süper, mükemmel) kullanma.");
+        sb.AppendLine("- KISA VE NET ol. Lafı dolandırma. Her cümle bilgi taşısın.");
+        sb.AppendLine("- Ozan bir şey sorduğunda HESAPLAMA YAPMAN gerekiyorsa, adım adım hesapla ve sonucu göster.");
+        sb.AppendLine("- Bir şey net değilse sor. Ama gereksiz detay sorma.");
+        sb.AppendLine("- Ozan'ın yazım hatalarını ya da eksik bilgilerini idare et — ne demek istediğini anlamaya çalış.");
+        sb.AppendLine("- \"X gram aldım/verdim\", \"X kg çıktım\", \"tartı X gösterdi\" = kilo değişimi. Bunu `log_weight` olarak kaydet.");
         sb.AppendLine();
-        sb.AppendLine("== DÜZELTME/SİLME (ÇOK ÖNEMLİ) ==");
-        sb.AppendLine("Ozan 'sil', 'çıkar', 'kaldır', 'yanlış oldu', 'yanlış yazdım', 'düzelt', 'değiştir', 'aslında', 'şu değil de', 'gramı yanlış', 'öğünü değiştir' gibi bir şey söylerse:");
-        sb.AppendLine("1. ASLA `log_food` çağırma — bu yeni kayıt ekler, üstüne ekleme yapar!");
-        sb.AppendLine("2. ÖNCE `list_meals` çağır, ID'leri gör.");
-        sb.AppendLine("3. Silme isteğiyse `delete_meal` ile ID'ye göre sil.");
-        sb.AppendLine("4. Düzeltme isteğiyse `edit_meal` ile ID'ye göre güncelle (TÜM alanları doldur).");
-        sb.AppendLine("5. Birden fazla öğün silinecekse HER BİRİ İÇİN ayrı `delete_meal` çağır.");
-        sb.AppendLine("6. İşlem sonrası kısaca teyit et (silinen/düzeltilen ne, yeni durum ne).");
-        sb.AppendLine($"Şu anki saat: {DateTime.Now:HH:mm}. Öğünü saate göre seç (sabah=Breakfast, öğle=Lunch, akşam=Dinner, ara=Snack) ya da Ozan söylerse ona göre.");
+
+        // === [2] ARAÇ TALİMATLARI ===
+        sb.AppendLine("== ARAÇ KULLANIMI ==");
+        sb.AppendLine("- Ozan bir şey yediğini söylerse HEMEN `log_food` ile kaydet. Onay isteme.");
+        sb.AppendLine("- Birden fazla besin varsa her biri için ayrı `log_food` çağır.");
+        sb.AppendLine("- Makro için aşağıdaki BESLENME REFERANSI tablosunu kullan. Bilmediğin besinde en yakın benzeri baz al.");
+        sb.AppendLine("- Kaydettikten sonra: ne kaydettiğini TEK CÜMLE ile teyit et, sonra hemen hedef/trend bağlamında yorum yap.");
+        sb.AppendLine("- Kilo söylerse `log_weight`, ruh hali/enerji/açlık belirtirse `log_checkin` çağır.");
         sb.AppendLine();
+        sb.AppendLine("== DÜZELTME/SİLME ==");
+        sb.AppendLine("Ozan sil/çıkar/kaldır/yanlış/düzelt/değiştir derse:");
+        sb.AppendLine("1. `log_food` ÇAĞIRMA — bu yeni kayıt ekler, üstüne bindirir!");
+        sb.AppendLine("2. ÖNCE `list_meals` ile ID'leri gör.");
+        sb.AppendLine("3. Silme → `delete_meal` (her öğün için ayrı). Düzeltme → `edit_meal` (TÜM alanları doldur).");
+        sb.AppendLine("4. İşlem sonrası kısaca teyit et.");
+        sb.AppendLine($"Saat: {DateTime.Now:HH:mm}. Öğün: 06-11=Breakfast, 11-15=Lunch, 15-18=Snack, 18+=Dinner.");
+        sb.AppendLine();
+
+        // === [3] BESLENME REFERANSI ===
+        sb.AppendLine("== BESLENME REFERANSI (100g başına yaklaşık değerler) ==");
+        sb.AppendLine("Tavuk göğsü (pişmiş): 165kcal, P31g, K0g, Y3.5g");
+        sb.AppendLine("Tavuk but (pişmiş): 210kcal, P26g, K0g, Y11g");
+        sb.AppendLine("Kırmızı et (dana, %20 yağlı): 250kcal, P26g, K0g, Y17g");
+        sb.AppendLine("Kıyma (dana, %15 yağ): 220kcal, P24g, K0g, Y13g");
+        sb.AppendLine("Balık (levrek/çupra, ızgara): 120kcal, P21g, K0g, Y4g");
+        sb.AppendLine("Somon (füme/pişmiş): 208kcal, P23g, K0g, Y13g");
+        sb.AppendLine("Yumurta (1 adet=50g): 78kcal, P6.3g, K0.6g, Y5.3g — gramla hesapla");
+        sb.AppendLine("Pirinç pilavı: 130kcal, P2.7g, K28g, Y0.3g");
+        sb.AppendLine("Bulgur pilavı: 115kcal, P3.5g, K23g, Y0.5g");
+        sb.AppendLine("Makarna (pişmiş): 130kcal, P5g, K25g, Y0.5g");
+        sb.AppendLine("Ekmek (beyaz, 1 dilim=25g): 65kcal, P2g, K13g, Y1g");
+        sb.AppendLine("Tam buğday ekmeği (1 dilim=25g): 60kcal, P2.5g, K11g, Y1g");
+        sb.AppendLine("Simit (1 adet=100g): 420kcal, P10g, K60g, Y15g");
+        sb.AppendLine("Mercimek çorbası (1 kase=250ml): 130kcal, P7g, K20g, Y2.5g");
+        sb.AppendLine("Tarhana çorbası (1 kase=250ml): 150kcal, P5g, K22g, Y4g");
+        sb.AppendLine("Zeytinyağı (1 yk=15ml): 120kcal, P0g, K0g, Y13.5g");
+        sb.AppendLine("Tereyağı (1 yk=15g): 105kcal, P0g, K0g, Y12g");
+        sb.AppendLine("Peynir (beyaz, tam yağlı): 270kcal, P17g, K1g, Y22g");
+        sb.AppendLine("Kaşar peyniri: 350kcal, P25g, K1g, Y28g");
+        sb.AppendLine("Yoğurt (tam yağlı): 65kcal, P3.5g, K4.5g, Y3.5g");
+        sb.AppendLine("Süzme yoğurt: 110kcal, P10g, K5g, Y5g");
+        sb.AppendLine("Süt (tam yağlı): 62kcal, P3.2g, K4.8g, Y3.3g");
+        sb.AppendLine("Kuruyemiş (karışık): 600kcal, P20g, K15g, Y55g");
+        sb.AppendLine("Muz (1 adet=120g): 105kcal, P1.3g, K27g, Y0.4g");
+        sb.AppendLine("Elma (1 adet=180g): 95kcal, P0.5g, K25g, Y0.3g");
+        sb.AppendLine("Tatlı (baklava, 1 porsiyon=150g): 450kcal, P8g, K50g, Y25g");
+        sb.AppendLine("Döner/iskender (1 porsiyon=350g): 550kcal, P35g, K30g, Y30g");
+        sb.AppendLine("Lahmacun (1 adet=120g): 280kcal, P10g, K40g, Y9g");
+        sb.AppendLine();
+        sb.AppendLine("MAKRO KALORİ: 1g protein = 4 kcal, 1g karbonhidrat = 4 kcal, 1g yağ = 9 kcal.");
+        sb.AppendLine("Bu tablo makro tahmini için referans. Bilmediğin besinde en yakın benzeri baz al.");
+        sb.AppendLine();
+
+        // === [4] ANTRENMAN REFERANSI ===
+        sb.AppendLine("== ANTRENMAN BİLGİSİ ==");
+        sb.AppendLine("- Hacim (volume) = set × ağırlık(kg) × tekrar. İlerlemenin ana göstergesidir.");
+        sb.AppendLine("- Progressive overload: haftada %2-5 hacim artışı sürdürülebilir ilerlemedir. %5+ hızlı, sakatlık riski var.");
+        sb.AppendLine("- Kas grubu toparlanması: büyük kaslar (göğüs/sırt/bacak) 48-72 saat, küçük kaslar (kol/omuz) 24-48 saat.");
+        sb.AppendLine("- Antrenman + kalori açığı = kas kaybı riski. Yüksek protein (1.6-2.2g/kg vücut ağırlığı) koruma sağlar.");
+        sb.AppendLine("- Antrenman öncesi (1-2 saat): karbonhidrat ağırlıklı + hafif protein — enerji ve kas koruması.");
+        sb.AppendLine("- Antrenman sonrası (ilk 2 saat): protein 20-40g + karbonhidrat — kas protein sentezi ve glikojen yenileme.");
+        sb.AppendLine("- Hacim düşüşü + aynı beslenme = yağlanma riski. Hacim düşerken kaloriyi de ayarla.");
+        sb.AppendLine();
+
+        // === [5] VERİ OKUMA ÇERÇEVESİ ===
+        sb.AppendLine("== ANALİZ REFERANSI ==");
+        sb.AppendLine("- Kilo: günlük ±1kg normal (su/glikojen). Haftalık ortalama = gerçek trend.");
+        sb.AppendLine("- Kilo kaybı: 0.5-1.0 kg/hafta sağlıklı. Daha hızlısı = kas kaybı + metabolizma yavaşlaması.");
+        sb.AppendLine("- Kilo alımı: 0.25-0.5 kg/hafta. Fazlası yağ.");
+        sb.AppendLine("- Sürdürülebilir günlük açık: 300-500 kcal.");
+        sb.AppendLine("- Protein: 1.6-2.2g/kg vücut ağırlığı.");
+        sb.AppendLine("- Anomali: tek günde 3kg+ değişim veya tek öğünde 3000kcal+ = sorgula.");
+        sb.AppendLine();
+
+        // === [6] CANLI VERİ ===
         sb.AppendLine("== GÜNCEL VERİLER (bugün) ==");
 
         if (goals is not null)
@@ -447,6 +595,16 @@ public class CoachController : ControllerBase
         sb.AppendLine($"Bugün alınan: {cal:0} kcal, Protein {pro:0}g, Karb {carb:0}g, Yağ {fat:0}g.");
         if (goals is not null)
             sb.AppendLine($"Kalori farkı: {cal - goals.CalorieGoal:0} kcal (negatif = açık).");
+
+        // Weekly comparison — 7-day summary
+        if (weeklyHistory.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("== SON 7 GÜN KALORİ ==");
+            foreach (var line in weeklyHistory)
+                sb.AppendLine($"- {line}");
+            sb.AppendLine($"Bu hafta ort: {thisWeekAvg:0} kcal/gün | Geçen hafta ort: {prevWeekAvg:0} kcal/gün | Fark: {(prevWeekAvg > 0 ? (thisWeekAvg - prevWeekAvg) / prevWeekAvg * 100 : 0):+0;-0;0}%");
+        }
 
         // Full weight history
         if (weights.Count > 0)
