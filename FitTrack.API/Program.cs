@@ -29,7 +29,9 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<FitTrack.API.Services.CoachService>();
 builder.Services.AddHostedService<FitTrack.API.Services.TelegramBotService>();
+builder.Services.AddHostedService<FitTrack.API.Services.DailyCoachService>();
 
 var app = builder.Build();
 
@@ -53,6 +55,14 @@ using (var scope = app.Services.CreateScope())
             CREATE TABLE IF NOT EXISTS "CoachMessages" (
                 "Id" TEXT NOT NULL CONSTRAINT "PK_CoachMessages" PRIMARY KEY,
                 "Role" TEXT NOT NULL, "Content" TEXT NOT NULL, "CreatedAt" TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS "CoachNotes" (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_CoachNotes" PRIMARY KEY,
+                "Category" TEXT NOT NULL, "Content" TEXT NOT NULL, "CreatedAt" TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS "AppSettings" (
+                "Key" TEXT NOT NULL CONSTRAINT "PK_AppSettings" PRIMARY KEY,
+                "Value" TEXT NOT NULL
             );
             """);
         db.Database.ExecuteSqlRaw("DELETE FROM CoachMessages WHERE CreatedAt < datetime('now', '-3 days');");
