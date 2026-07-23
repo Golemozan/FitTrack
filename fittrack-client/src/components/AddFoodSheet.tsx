@@ -50,11 +50,13 @@ export default function AddFoodSheet({
   open,
   defaultMeal,
   editEntry,
+  logDate,
   onClose,
 }: {
   open: boolean;
   defaultMeal?: MealType;
   editEntry?: MealEntry | null;
+  logDate?: string | null; // YYYY-MM-DD — geçmiş güne ekleme için
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -119,6 +121,7 @@ export default function AddFoodSheet({
       carbs: n(picked.perG.carbs),
       fat: n(picked.perG.fat),
       mealType: meal,
+      ...(logDate ? { logDate } : {}),
     };
     if (editEntry) updateMeal.mutate({ id: editEntry.id, body }, { onSuccess: close });
     else logFood.mutate(body, { onSuccess: close });

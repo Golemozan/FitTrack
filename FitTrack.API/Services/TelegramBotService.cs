@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using FitTrack.API.Data;
@@ -15,7 +16,7 @@ public class TelegramBotService : BackgroundService
     private readonly IServiceScopeFactory _scope;
     private readonly IConfiguration _cfg;
     private readonly ILogger<TelegramBotService> _log;
-    private const string Model = "claude-haiku-4-5-20251001";
+    private const string Model = "claude-sonnet-5";
     private const string AnthropicUrl = "https://api.anthropic.com/v1/messages";
 
     public TelegramBotService(IServiceScopeFactory scope, IConfiguration cfg, ILogger<TelegramBotService> log)
@@ -145,7 +146,7 @@ public class TelegramBotService : BackgroundService
             var payload = new JsonObject
             {
                 ["model"] = Model,
-                ["max_tokens"] = 1024,
+                ["max_tokens"] = 2048,
                 ["system"] = system,
                 ["tools"] = Tools(),
                 ["messages"] = messages.DeepClone(),
@@ -240,7 +241,7 @@ public class TelegramBotService : BackgroundService
         new JsonObject
         {
             ["name"] = "log_food",
-            ["description"] = "Ozan bir şey yediğini söylediğinde besini ekle. Makroları tahmin et. calories/protein/carbs/fat TOPLAM değer. Öğünü saate göre seç.",
+            ["description"] = "Ozan bir şey yediğinde besini günlüğe ekle. Makro tahmini için sistem promptundaki BESLENME REFERANSI tablosunu kullan. calories/protein/carbs/fat TOPLAM tüketilen miktar için. Öğünü saate göre seç. date: YYYY-MM-DD, boşsa bugün.",
             ["input_schema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -252,7 +253,8 @@ public class TelegramBotService : BackgroundService
                     ["protein"] = new JsonObject { ["type"] = "number" },
                     ["carbs"] = new JsonObject { ["type"] = "number" },
                     ["fat"] = new JsonObject { ["type"] = "number" },
-                    ["mealType"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "Breakfast", "Lunch", "Dinner", "Snack" } }
+                    ["mealType"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "Breakfast", "Lunch", "Dinner", "Snack" } },
+                    ["date"] = new JsonObject { ["type"] = "string", ["description"] = "YYYY-MM-DD formatında tarih. Boşsa bugün." }
                 },
                 ["required"] = new JsonArray { "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType" }
             }
@@ -260,7 +262,7 @@ public class TelegramBotService : BackgroundService
         new JsonObject
         {
             ["name"] = "log_weight",
-            ["description"] = "Ozan kilosunu söylediğinde kaydet.",
+            ["description"] = "Ozan kilosunu söylediğinde kaydet. Aynı gün varsa üstüne yazar.",
             ["input_schema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -289,6 +291,69 @@ public class TelegramBotService : BackgroundService
                 },
                 ["required"] = new JsonArray { "mood", "energy", "hunger" }
             }
+        },
+        new JsonObject
+        {
+            ["name"] = "list_meals",
+            ["description"] = "Yemek listesini getir. date: YYYY-MM-DD, boşsa bugün. Geçmiş günler için date belirt.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["date"] = new JsonObject { ["type"] = "string", ["description"] = "YYYY-MM-DD formatında tarih. Boşsa bugün." }
+                },
+                ["required"] = new JsonArray(),
+            }
+        },
+        new JsonObject
+        {
+            ["name"] = "delete_meal",
+            ["description"] = "Öğünü ID'sine göre sil. Ozan 'sil', 'çıkar', 'kaldır' derse KULLAN. ÖNCE list_meals ile ID'leri gör.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["mealId"] = new JsonObject { ["type"] = "string", ["description"] = "Silinecek öğünün GUID ID'si" }
+                },
+                ["required"] = new JsonArray { "mealId" }
+            }
+        },
+        new JsonObject
+        {
+            ["name"] = "edit_meal",
+            ["description"] = "Var olan öğünü ID'sine göre düzenle. 'düzelt', 'değiştir', 'aslında ... gramdı' derse KULLAN. ÖNCE list_meals ile ID'yi bul.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["mealId"] = new JsonObject { ["type"] = "string", ["description"] = "Düzenlenecek öğünün GUID ID'si" },
+                    ["foodName"] = new JsonObject { ["type"] = "string" },
+                    ["grams"] = new JsonObject { ["type"] = "number" },
+                    ["calories"] = new JsonObject { ["type"] = "number" },
+                    ["protein"] = new JsonObject { ["type"] = "number" },
+                    ["carbs"] = new JsonObject { ["type"] = "number" },
+                    ["fat"] = new JsonObject { ["type"] = "number" },
+                    ["mealType"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "Breakfast", "Lunch", "Dinner", "Snack" } }
+                },
+                ["required"] = new JsonArray { "mealId", "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType" }
+            }
+        },
+        new JsonObject
+        {
+            ["name"] = "get_nutrition_history",
+            ["description"] = "Son N günün günlük kalori/makro özetini getir. Ozan 'bu hafta nasıldı', 'son 1 ayda ne kadar yedim', 'trend nasıl' derse KULLAN. Her gün için tarih, toplam kalori, P/K/Y, öğün sayısı döner.",
+            ["input_schema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["days"] = new JsonObject { ["type"] = "integer", ["description"] = "Kaç günlük geçmiş (varsayılan 7, maks 90)" }
+                },
+                ["required"] = new JsonArray()
+            }
         }
     };
 
@@ -299,6 +364,7 @@ public class TelegramBotService : BackgroundService
             switch (name)
             {
                 case "log_food":
+                    var date = ParseDateTg(Str(inp, "date")) ?? DateTime.Now;
                     var fe = new MealEntry
                     {
                         Id = Guid.NewGuid(),
@@ -309,11 +375,12 @@ public class TelegramBotService : BackgroundService
                         Carbs = Num(inp, "carbs"),
                         Fat = Num(inp, "fat"),
                         MealType = Enum.TryParse<MealType>(Str(inp, "mealType"), out var mt) ? mt : MealType.Snack,
-                        LoggedAt = DateTime.Now
+                        LoggedAt = date
                     };
                     db.MealEntries.Add(fe);
                     await db.SaveChangesAsync();
-                    return ($"✓ {fe.FoodName} {fe.Grams:0}g ({fe.Calories:0} kcal, P{fe.Protein:0} K{fe.Carbs:0} Y{fe.Fat:0})", "nutrition", false);
+                    var dateLabel = date.Date == DateTime.Now.Date ? "" : $" ({date:dd.MM})";
+                    return ($"✓{dateLabel} {fe.FoodName} {fe.Grams:0}g ({fe.Calories:0} kcal, P{fe.Protein:0} K{fe.Carbs:0} Y{fe.Fat:0})", "nutrition", false);
 
                 case "log_weight":
                     var day = DateTime.Now.Date;
@@ -347,6 +414,65 @@ public class TelegramBotService : BackgroundService
                     await db.SaveChangesAsync();
                     return ($"✓ Check-in: Ruh {ci.Mood}, Enerji {ci.Energy}, Açlık {ci.Hunger}", "checkin", false);
 
+                case "list_meals":
+                    var tgDate = ParseDateTg(Str(inp, "date")) ?? DateTime.Now;
+                    var today = tgDate.Date;
+                    var allMeals = await db.MealEntries
+                        .Where(m => m.LoggedAt >= today && m.LoggedAt < today.AddDays(1))
+                        .OrderBy(m => m.LoggedAt)
+                        .ToListAsync();
+                    var tgDateLabel = today == DateTime.Now.Date ? "Bugün" : today.ToString("dd.MM.yyyy");
+                    if (allMeals.Count == 0)
+                        return ($"{tgDateLabel} yemek kaydı yok.", null, false);
+                    var lines = allMeals.Select(m =>
+                        $"ID:{m.Id} [{m.MealType}] {m.FoodName} {m.Grams:0}g = {m.Calories:0} kcal (P{m.Protein:0}/K{m.Carbs:0}/Y{m.Fat:0}) {m.LoggedAt:HH:mm}");
+                    var total = $"TOPLAM: {allMeals.Sum(m => m.Calories):0} kcal, P{allMeals.Sum(m => m.Protein):0} K{allMeals.Sum(m => m.Carbs):0} Y{allMeals.Sum(m => m.Fat):0}";
+                    return ($"{tgDateLabel}:\n{string.Join("\n", lines)}\n{total}", null, false);
+
+                case "delete_meal":
+                    var delId = Str(inp, "mealId");
+                    if (!Guid.TryParse(delId, out var delGuid))
+                        return ($"Geçersiz ID: {delId}. Önce list_meals ile ID'leri gör.", null, true);
+                    var delMeal = await db.MealEntries.FindAsync(delGuid);
+                    if (delMeal is null)
+                        return ($"ID:{delId} bulunamadı.", null, true);
+                    var delDesc = $"{delMeal.FoodName} {delMeal.Grams:0}g ({delMeal.Calories:0} kcal)";
+                    db.MealEntries.Remove(delMeal);
+                    await db.SaveChangesAsync();
+                    return ($"✓ Silindi: {delDesc}.", "nutrition", false);
+
+                case "edit_meal":
+                    var editId = Str(inp, "mealId");
+                    if (!Guid.TryParse(editId, out var editGuid))
+                        return ($"Geçersiz ID: {editId}. Önce list_meals ile ID'leri gör.", null, true);
+                    var editMeal = await db.MealEntries.FindAsync(editGuid);
+                    if (editMeal is null)
+                        return ($"ID:{editId} bulunamadı.", null, true);
+                    var oldDesc = $"{editMeal.FoodName} {editMeal.Grams:0}g ({editMeal.Calories:0} kcal)";
+                    editMeal.FoodName = Str(inp, "foodName");
+                    editMeal.Grams = Num(inp, "grams");
+                    editMeal.Calories = Num(inp, "calories");
+                    editMeal.Protein = Num(inp, "protein");
+                    editMeal.Carbs = Num(inp, "carbs");
+                    editMeal.Fat = Num(inp, "fat");
+                    editMeal.MealType = Enum.TryParse<MealType>(Str(inp, "mealType"), out var editMt) ? editMt : MealType.Snack;
+                    await db.SaveChangesAsync();
+                    var newDesc = $"{editMeal.FoodName} {editMeal.Grams:0}g = {editMeal.Calories:0} kcal (P{editMeal.Protein:0}/K{editMeal.Carbs:0}/Y{editMeal.Fat:0})";
+                    return ($"✓ Güncellendi: [{oldDesc}] → [{newDesc}].", "nutrition", false);
+
+                case "get_nutrition_history":
+                    var hDays = (int)Math.Clamp(Num(inp, "days"), 1, 90);
+                    if (hDays == 0) hDays = 7;
+                    var hSince = DateTime.Now.Date.AddDays(-hDays + 1);
+                    var hEntries = await db.MealEntries.Where(m => m.LoggedAt >= hSince).ToListAsync();
+                    var hDaily = hEntries.GroupBy(m => m.LoggedAt.Date).OrderBy(g => g.Key)
+                        .Select(g => new { Date = g.Key.ToString("dd.MM.yyyy"), Cal = g.Sum(m => m.Calories), P = g.Sum(m => m.Protein), C = g.Sum(m => m.Carbs), F = g.Sum(m => m.Fat), Cnt = g.Count() })
+                        .ToList();
+                    if (hDaily.Count == 0) return ($"Son {hDays} günde yemek kaydı yok.", null, false);
+                    var hLines = hDaily.Select(d => $"{d.Date}: {d.Cal:0} kcal, P{d.P:0} K{d.C:0} Y{d.F:0} ({d.Cnt} öğün)");
+                    var hAvg = hDaily.Average(d => d.Cal);
+                    return ($"Son {hDays} gün:\n{string.Join("\n", hLines)}\n\nGünlük ortalama: {hAvg:0} kcal.", null, false);
+
                 default:
                     return ("Bilinmeyen araç", null, true);
             }
@@ -379,6 +505,14 @@ public class TelegramBotService : BackgroundService
         try { return v.GetValue<string>(); } catch { return v?.ToString() ?? ""; }
     }
 
+    static DateTime? ParseDateTg(string dateStr)
+    {
+        if (string.IsNullOrWhiteSpace(dateStr)) return null;
+        if (DateTime.TryParseExact(dateStr.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+            return d;
+        return null;
+    }
+
     async Task<string> BuildPrompt(AppDbContext db)
     {
         var day = DateTime.Now.Date;
@@ -389,14 +523,69 @@ public class TelegramBotService : BackgroundService
         double? cw = weights.Count > 0 ? weights[^1].WeightKg : null;
         double? sw = weights.Count > 0 ? weights[0].WeightKg : null;
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Ozan'ın Telegram koçusun. KISA konuş (max 2-3 cümle). Emoji YOK. 'Harika/süper' YOK. Sadece veri.");
-        sb.AppendLine("Yemek söylerse → log_food. Kilo → log_weight. Ruh hali/enerji/açlık → log_checkin. Direkt yap, onay sorma.");
-        sb.AppendLine($"Saat: {DateTime.Now:HH:mm}.");
+        // Weekly comparison
+        var weekAgo = day.AddDays(-7);
+        var twoWeeksAgo = day.AddDays(-14);
+        var last7Days = await db.MealEntries.Where(m => m.LoggedAt >= weekAgo && m.LoggedAt < day).ToListAsync();
+        var prev7Days = await db.MealEntries.Where(m => m.LoggedAt >= twoWeeksAgo && m.LoggedAt < weekAgo).ToListAsync();
+        var thisWeekAvg = last7Days.Count > 0 ? last7Days.Sum(m => m.Calories) / 7.0 : 0;
+        var prevWeekAvg = prev7Days.Count > 0 ? prev7Days.Sum(m => m.Calories) / 7.0 : 0;
 
+        var sb = new StringBuilder();
+
+        // Kimlik + domain bilgisi (Telegram'a uygun compact)
+        sb.AppendLine("Ozan'ın fitness koçusun. Spor bilimleri ve beslenme biyokimyası deneyimlisin.");
+        sb.AppendLine("Doğal Türkçe konuş. Direkt ve net ol. Gerekirse detaylı analiz yap.");
+        sb.AppendLine("SELAMLAŞMA YOK. \"Selam Ozan\", \"Ben Koç\" gibi girişler YAPMA. Konuya direkt gir.");
+        sb.AppendLine("Veriye dayalı, bilimsel, ölçülü. Emoji YOK. Aşırı övgü YOK.");
+        sb.AppendLine("Ozan bir şey yediğini söylerse HEMEN log_food ile kaydet, onay sorma.");
+        sb.AppendLine();
+
+        // Araç talimatları (6 tool)
+        sb.AppendLine("== ARAÇLAR ==");
+        sb.AppendLine("Yemek → log_food (makroları beslenme referans tablosundan tahmin et). Kilo → log_weight. Ruh hali/enerji/açlık → log_checkin. Direkt yap, onay sorma.");
+        sb.AppendLine("Düzeltme/silme: ASLA log_food çağırma. ÖNCE list_meals → sonra delete_meal/edit_meal.");
+        sb.AppendLine("Ozan sayısal veri verdiğinde (kalori, gram, kilo) HESAPLAMA YAP ve sonucu göster. Yarım bırakma.");
+        sb.AppendLine($"Saat: {DateTime.Now:HH:mm}.");
+        sb.AppendLine();
+
+        // Beslenme referansı (compact)
+        sb.AppendLine("== BESLENME REFERANSI (100g başına) ==");
+        sb.AppendLine("Tavuk göğsü:165kcal P31 K0 Y3.5 | Kırmızı et:250 P26 K0 Y17 | Kıyma(%15):220 P24 K0 Y13");
+        sb.AppendLine("Yumurta(1ad):78 P6.3 K0.6 Y5.3 | Peynir beyaz:270 P17 K1 Y22 | Yoğurt:65 P3.5 K4.5 Y3.5");
+        sb.AppendLine("Pirinç pilavı:130 P2.7 K28 Y0.3 | Bulgur:115 P3.5 K23 Y0.5 | Makarna(p):130 P5 K25 Y0.5");
+        sb.AppendLine("Ekmek(1dil):65 P2 K13 Y1 | Simit(1):420 P10 K60 Y15 | Mercimek çorba:130 P7 K20 Y2.5");
+        sb.AppendLine("Zeytinyağı(1yk):120 P0 K0 Y13.5 | Tereyağı(1yk):105 P0 K0 Y12 | Kuruyemiş:600 P20 K15 Y55");
+        sb.AppendLine("Baklava(150g):450 P8 K50 Y25 | Döner(350g):550 P35 K30 Y30 | Lahmacun(1):280 P10 K40 Y9");
+        sb.AppendLine("1g P=4 K=4 Y=9 kcal. Bilmediğin besinde en yakın benzeri baz al.");
+        sb.AppendLine();
+
+        // Antrenman bilgisi (compact)
+        sb.AppendLine("== ANTRENMAN ==");
+        sb.AppendLine("Hacim=set×kg×tekrar. Progressive overload: haftada %2-5 artış. Büyük kas 48-72h, küçük 24-48h dinlenme.");
+        sb.AppendLine("Kalori açığı+antrenman=kas kaybı riski → protein 1.6-2.2g/kg korur. Antrenman sonrası 2h içinde 20-40g protein.");
+        sb.AppendLine();
+
+        // Veri okuma (compact)
+        sb.AppendLine("== ANALİZ ==");
+        sb.AppendLine("Kilo: günlük±1kg normal, haftalık ortalama trend gösterir. Sağlıklı kayıp:0.5-1kg/hafta. Açık:300-500kcal.");
+        sb.AppendLine("Düşük enerji+düşük kalori=yetersiz beslenme. Anormallik varsa sorgula (3kg/gün, 3000kcal/öğün).");
+        sb.AppendLine();
+
+        // Canlı veri
+        if (meals.Count > 0)
+            sb.AppendLine($"Bugün: {meals.Sum(m => m.Calories):0}kcal P{meals.Sum(m => m.Protein):0} K{meals.Sum(m => m.Carbs):0} Y{meals.Sum(m => m.Fat):0}");
         if (goals != null)
             sb.AppendLine($"Hedef: {goals.CalorieGoal:0}kcal P{goals.ProteinGoal:0} K{goals.CarbGoal:0} Y{goals.FatGoal:0}");
-        sb.AppendLine($"Bugün: {meals.Sum(m => m.Calories):0}kcal P{meals.Sum(m => m.Protein):0} K{meals.Sum(m => m.Carbs):0} Y{meals.Sum(m => m.Fat):0}");
+
+        // Weekly calorie summary
+        if (last7Days.Count > 0)
+        {
+            var dailyCal = last7Days.GroupBy(m => m.LoggedAt.Date).OrderBy(g => g.Key)
+                .Select(g => $"{g.Key:dd.MM}:{g.Sum(m => m.Calories):0}kcal").ToList();
+            sb.AppendLine($"Son 7 gün: {string.Join(" ", dailyCal)}");
+            sb.AppendLine($"Bu hafta ort: {thisWeekAvg:0} kcal/gün | Geçen hafta ort: {prevWeekAvg:0} kcal/gün | Değişim: {(prevWeekAvg > 0 ? (thisWeekAvg - prevWeekAvg) / prevWeekAvg * 100 : 0):+0;-0;0}%");
+        }
 
         if (weights.Count > 0)
         {

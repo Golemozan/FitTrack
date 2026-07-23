@@ -6,6 +6,14 @@ export function useTodayMeals() {
   return useQuery({ queryKey: ["nutrition", "today"], queryFn: nutritionApi.today });
 }
 
+export function useDayMeals(date: string | null) {
+  return useQuery({
+    queryKey: ["nutrition", "day", date],
+    queryFn: () => nutritionApi.day(date!),
+    enabled: !!date,
+  });
+}
+
 export function useNutritionSummary(date?: string) {
   return useQuery({
     queryKey: ["nutrition", "summary", date ?? "today"],
@@ -35,5 +43,20 @@ export function useDeleteMeal() {
   return useMutation({
     mutationFn: (id: string) => nutritionApi.deleteLog(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nutrition"] }),
+  });
+}
+
+export function useNutritionHistory(days = 30) {
+  return useQuery({
+    queryKey: ["nutrition", "history", days],
+    queryFn: () => nutritionApi.history(days),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useNutritionStreak() {
+  return useQuery({
+    queryKey: ["nutrition", "streak"],
+    queryFn: nutritionApi.streak,
   });
 }

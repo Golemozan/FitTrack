@@ -10,6 +10,7 @@ public class LogFoodRequest
     public double Carbs { get; set; }
     public double Fat { get; set; }
     public MealType MealType { get; set; }
+    public DateTime? LogDate { get; set; } // optional — geçmiş güne ekleme için, null = bugün
 }
 
 // GET /api/nutrition/summary
@@ -19,6 +20,23 @@ public class NutritionSummary
     public double TotalProtein { get; set; }
     public double TotalCarbs { get; set; }
     public double TotalFat { get; set; }
+}
+
+// GET /api/nutrition/history → one entry per day
+public class DailyNutritionSummary
+{
+    public DateTime Date { get; set; }
+    public double TotalCalories { get; set; }
+    public double TotalProtein { get; set; }
+    public double TotalCarbs { get; set; }
+    public double TotalFat { get; set; }
+    public int MealCount { get; set; }
+}
+
+// GET /api/nutrition/streak
+public class NutritionStreak
+{
+    public int Days { get; set; }
 }
 
 // Body for PUT /api/goals

@@ -11,6 +11,7 @@ import WorkoutSection from "./sections/WorkoutSection";
 import WeightSection from "./sections/WeightSection";
 import GoalsSection from "./sections/GoalsSection";
 import { useTodayMeals } from "./hooks/useNutrition";
+import { useNutritionStreak } from "./hooks/useNutrition";
 import { useGoals } from "./hooks/useGoals";
 import { useTodaySession } from "./hooks/useWorkout";
 import { useWeightStats } from "./hooks/useWeight";
@@ -144,6 +145,7 @@ function Tile({
 function CalorieTile({ onOpen }: { onOpen: () => void }) {
   const meals = useTodayMeals();
   const goals = useGoals();
+  const streak = useNutritionStreak();
   const cal = useMemo(() => {
     const all = (meals.data ? Object.values(meals.data).flat() : []) as MealEntry[];
     return all.reduce((a, m) => a + m.calories, 0);
@@ -159,6 +161,12 @@ function CalorieTile({ onOpen }: { onOpen: () => void }) {
       <div className="mt-3">
         <ProgressBar value={cal} max={goal} colorClass="bg-accent-grad" />
       </div>
+      {(streak.data?.days ?? 0) > 0 && (
+        <div className="mt-2 flex items-center gap-1 text-xs font-medium text-accent">
+          <span>🔥</span>
+          <span>{streak.data!.days} günlük streak</span>
+        </div>
+      )}
     </Tile>
   );
 }

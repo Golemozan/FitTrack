@@ -4,13 +4,13 @@ import { useCoachChat } from "../hooks/useCoach";
 import type { CoachMessage } from "../types";
 
 const GREETING =
-  "Selam Ozan 👋 Ben Koç. Nasıl hissediyorsun? Açlık/tokluk, enerji, antrenman... anlat, verilerinle karşılaştırıp yol gösteririm.";
+  "Selam Ozan. Ben Koç. Spor bilimleri ve beslenme biyokimyası temelinde çalışıyorum. Ne yediğini, nasıl hissettiğini, antrenmanını anlat — verilerinle birlikte analiz edip yönlendireyim.";
 
 const SUGGESTIONS = [
-  "Bugün nasıl gidiyorum?",
-  "Canım tatlı çekiyor",
-  "Antrenman öncesi ne yesem?",
-  "Hedefime yaklaşıyor muyum?",
+  "Kilo trendimi yorumla",
+  "Bugünkü protein yeterli mi?",
+  "Antrenman hacmim nasıl gidiyor?",
+  "Bu hafta beslenmem nasıl?",
 ];
 
 /** Full-height coach conversation — fills whatever container it's dropped into. */
