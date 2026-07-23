@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<CoachMessageRecord> CoachMessages => Set<CoachMessageRecord>();
+    public DbSet<CoachNote> CoachNotes => Set<CoachNote>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
     // Fixed identifiers so the seed is deterministic across migrations.
     public static readonly Guid DefaultGoalsId = Guid.Parse("11111111-1111-1111-1111-111111111111");
