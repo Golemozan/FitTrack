@@ -1,0 +1,14 @@
+# Build çıktıları ve yerel artefaktlar imaja girmesin — hem yavaşlatır hem de
+# node_modules platforma özel ikili taşıdığı için build'i bozar.
+**/node_modules
+**/bin
+**/obj
+**/dist
+**/.vite
+.git
+.gitignore
+*.db
+*.db-shm
+*.db-wal
+**/.env
+**/*.tsbuildinfo
