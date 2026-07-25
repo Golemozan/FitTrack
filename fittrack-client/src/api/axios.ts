@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearApiKey, getApiKey, UNAUTHORIZED_EVENT } from "./auth";
 
 // Use 127.0.0.1 (not "localhost"): Kestrel binds IPv4 (0.0.0.0), while "localhost"
 // resolves to IPv6 ::1 first on Windows → each request pays an IPv6 connect timeout
@@ -8,5 +9,24 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
   timeout: 8000,
 });
+
+// Her isteğe parolayı ekle.
+api.interceptors.request.use((config) => {
+  const key = getApiKey();
+  if (key) config.headers.set("X-Api-Key", key);
+  return config;
+});
+
+// Parola reddedildiyse sakladığımızı at ve kilit ekranını çağır.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      clearApiKey();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;
