@@ -24,7 +24,7 @@ public class CheckInController : ControllerBase
             Hunger = Math.Clamp(req.Hunger, 1, 5),
             Note = req.Note,
             Context = req.Context ?? "general",
-            LoggedAt = DateTime.UtcNow,
+            LoggedAt = DateTime.Now, // kullanıcının saati — bkz. Dockerfile TZ
         };
         _db.CheckIns.Add(entry);
         await _db.SaveChangesAsync();
@@ -46,7 +46,7 @@ public class CheckInController : ControllerBase
     [HttpGet("today")]
     public async Task<ActionResult<List<CheckIn>>> Today()
     {
-        var day = DateTime.UtcNow.Date;
+        var day = DateTime.Now.Date;
         return await _db.CheckIns
             .Where(c => c.LoggedAt >= day && c.LoggedAt < day.AddDays(1))
             .OrderByDescending(c => c.LoggedAt)

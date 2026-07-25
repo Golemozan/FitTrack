@@ -12,11 +12,14 @@ public class WeightController : ControllerBase
     private readonly AppDbContext _db;
     public WeightController(AppDbContext db) => _db = db;
 
-    // 1. POST /api/weight/log  → upsert on date (loggedAt from body, or today)
+    // Gün sınırları kullanıcının saatine göre hesaplanır. Konteynerin TZ'i
+    // Europe/Istanbul olarak ayarlı (bkz. Dockerfile), bu yüzden DateTime.Now
+    // doğru "bugün"ü verir. UtcNow kullanmak gece 00:00-03:00 arası girilen
+    // kaydı bir önceki güne yazardı.
     [HttpPost("log")]
     public async Task<ActionResult<WeightLog>> Log(LogWeightRequest req)
     {
-        var targetDay = (req.LoggedAt ?? DateTime.UtcNow).Date;
+        var targetDay = (req.LoggedAt ?? DateTime.Now).Date;
         var existing = await _db.WeightLogs
             .FirstOrDefaultAsync(w => w.LoggedAt >= targetDay && w.LoggedAt < targetDay.AddDays(1));
 
@@ -45,7 +48,7 @@ public class WeightController : ControllerBase
     [HttpGet("today")]
     public async Task<ActionResult<WeightLog?>> Today()
     {
-        var day = DateTime.UtcNow.Date;
+        var day = DateTime.Now.Date;
         var log = await _db.WeightLogs
             .Where(w => w.LoggedAt >= day && w.LoggedAt < day.AddDays(1))
             .OrderByDescending(w => w.LoggedAt)
@@ -58,7 +61,7 @@ public class WeightController : ControllerBase
     public async Task<ActionResult<List<WeightPoint>>> History([FromQuery] int days = 30)
     {
         if (days <= 0) days = 30;
-        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+        var since = DateTime.Now.Date.AddDays(-days + 1);
         return await _db.WeightLogs
             .Where(w => w.LoggedAt >= since)
             .OrderBy(w => w.LoggedAt)
@@ -78,7 +81,7 @@ public class WeightController : ControllerBase
 
         // Weekly change: compare to the most recent log at or before 7 days ago,
         // falling back to the earliest log when there's no older sample.
-        var weekAgo = DateTime.UtcNow.AddDays(-7);
+        var weekAgo = DateTime.Now.AddDays(-7);
         var baseline = logs.LastOrDefault(w => w.LoggedAt <= weekAgo) ?? start;
 
         return new WeightStats

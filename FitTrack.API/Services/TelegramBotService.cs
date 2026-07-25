@@ -14,6 +14,13 @@ public class TelegramBotService : BackgroundService
 {
     public const string ChatIdKey = "telegram.chatId";
 
+    /// <summary>
+    /// Ard arda kaç 409 Conflict'ten sonra yoklama tamamen bırakılır.
+    /// Deploy sırasında eski konteyner bir süre daha ayakta kalabilir; birkaç
+    /// çakışmaya tolerans gösterip sonra pes ediyoruz.
+    /// </summary>
+    private const int MaxConsecutiveConflicts = 6;
+
     private readonly IServiceScopeFactory _scope;
     private readonly IConfiguration _cfg;
     private readonly ILogger<TelegramBotService> _log;
@@ -30,7 +37,19 @@ public class TelegramBotService : BackgroundService
         var token = _cfg["Telegram:BotToken"] ?? "";
         if (string.IsNullOrEmpty(token))
         {
-            _log.LogWarning("Telegram bot token not configured. Bot will not start.");
+            _log.LogWarning("Telegram bot token yok. Bot başlatılmadı.");
+            return;
+        }
+
+        // Telegram'ın getUpdates'i tek tüketiciye izin verir. İki örnek aynı token'ı
+        // yoklarsa Telegram her mesajı rastgele birine verir; ikisi de kendi
+        // veritabanına bakıp cevap yazar ve kullanıcı çelişkili yanıtlar görür.
+        // Bu yüzden yoklama açıkça izin verilmeden başlamaz — yerelde uygulamayı
+        // çalıştırmak canlıdaki botu kaçırmaz.
+        if (!bool.TryParse(_cfg["Telegram:Polling"], out var polling) || !polling)
+        {
+            _log.LogInformation(
+                "Telegram yoklaması kapalı (Telegram:Polling ayarlı değil). Bot başlatılmadı.");
             return;
         }
 
@@ -42,7 +61,8 @@ public class TelegramBotService : BackgroundService
         }
 
         long lastId = 0;
-        _log.LogInformation("Telegram bot polling started.");
+        var conflicts = 0;
+        _log.LogInformation("Telegram yoklaması başladı.");
 
         while (!ct.IsCancellationRequested)
         {
@@ -54,7 +74,35 @@ public class TelegramBotService : BackgroundService
                 var body = await resp.Content.ReadAsStringAsync(ct);
 
                 var root = JsonNode.Parse(body);
-                if ((bool?)root?["ok"] != true) { await Task.Delay(2000, ct); continue; }
+                if ((bool?)root?["ok"] != true)
+                {
+                    // 409 = başka bir örnek aynı botu yokluyor. Sessizce yeniden
+                    // denemek iki örneğin sonsuza kadar kapışması demek; bunu
+                    // gürültüyle bildirip çekiliyoruz.
+                    if ((int?)root?["error_code"] == 409)
+                    {
+                        conflicts++;
+                        _log.LogWarning(
+                            "Telegram 409 Conflict — başka bir örnek aynı botu yokluyor ({N}/{Max}). {Desc}",
+                            conflicts, MaxConsecutiveConflicts, (string?)root?["description"]);
+
+                        if (conflicts >= MaxConsecutiveConflicts)
+                        {
+                            _log.LogError(
+                                "Telegram yoklaması durduruldu: aynı token'ı kullanan başka bir örnek var. " +
+                                "Aynı anda yalnızca tek bir örnek Telegram:Polling=true ile çalışmalı.");
+                            return;
+                        }
+
+                        await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                        continue;
+                    }
+
+                    await Task.Delay(2000, ct);
+                    continue;
+                }
+
+                conflicts = 0;
 
                 var updates = root["result"]?.AsArray();
                 if (updates is null) { await Task.Delay(1000, ct); continue; }
