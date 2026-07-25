@@ -19,6 +19,16 @@ RUN dotnet publish FitTrack.API/FitTrack.API.csproj -c Release -o out
 
 # ---- 3. Çalışma imajı ----
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
+# Gün sınırları kullanıcının saatine göre hesaplanır. Konteyner UTC kalırsa
+# gece 00:00-03:00 arasında girilen her kayıt bir önceki güne düşer.
+ENV TZ=Europe/Istanbul
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata \
+ && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+ && echo $TZ > /etc/timezone \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=build /app/out .
 COPY --from=client /client/dist ./wwwroot

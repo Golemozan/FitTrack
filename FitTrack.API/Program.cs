@@ -79,6 +79,12 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex) { app.Logger.LogError(ex, "DB init failed."); }
 }
 
+// Açılışta hangi veritabanına ve hangi saate bağlı olduğumuzu yaz. Birden fazla
+// örnek farklı dosyalara bakarken bu satır teşhisi saniyeler içinde bitiriyor.
+app.Logger.LogInformation(
+    "FitTrack açılıyor · Veritabanı: {Db} · Saat dilimi: {Tz} · Yerel saat: {Now:yyyy-MM-dd HH:mm}",
+    dbPath, TimeZoneInfo.Local.Id, DateTime.Now);
+
 // Arayüz aynı imajdan servis edilir (wwwroot). Statik dosyalar korumasızdır —
 // içlerinde veri yok, kilit ekranı zaten uygulamanın içinde.
 app.UseDefaultFiles();

@@ -35,7 +35,7 @@ public class MealEntriesController : ControllerBase
     public async Task<ActionResult<MealEntry>> Create(MealEntry entry)
     {
         entry.Id = Guid.NewGuid();
-        if (entry.LoggedAt == default) entry.LoggedAt = DateTime.UtcNow;
+        if (entry.LoggedAt == default) entry.LoggedAt = DateTime.Now;
         _db.MealEntries.Add(entry);
         await _db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = entry.Id }, entry);
