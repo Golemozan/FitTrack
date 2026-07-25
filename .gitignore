@@ -9,3 +9,6 @@ dist/
 
 # build artefaktlari
 *.tsbuildinfo
+
+# yerel veritabani yedekleri
+backups/

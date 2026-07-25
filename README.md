@@ -80,6 +80,58 @@ veriyi okuyamaz veya proaktif mesajları üstüne alamaz.
 
 ---
 
+## Veritabanı ve yedekleme
+
+### Veritabanı nerede?
+
+Uygulama SQLite kullanır ve dosyayı **çalıştığı yerin yanına** yazar
+(`AppContext.BaseDirectory`), `/var/data` varsa oraya. Bu yüzden nasıl çalıştırdığına
+göre farklı dosyalar oluşur — hangisinin gerçek veri olduğunu karıştırmak kolaydır:
+
+| Nasıl çalıştırdın | Veritabanı nerede |
+|---|---|
+| `dev.ps1` | `C:\ProgramData\FitTrack\fittrack.db` |
+| `dotnet run` (IDE / terminal) | `FitTrack.API\bin\Debug\net8.0\fittrack.db` |
+| Railway (canlı) | `/var/data/fittrack.db` (kalıcı volume) |
+
+> **Canlı yayına geçtikten sonra gerçek veri buluttakidir.** Yerelde çalıştırırsan
+> yerel dosyaya yazarsın ve veri ikiye bölünür.
+
+Bir dosyanın içinde ne olduğunu görmek için:
+
+```bash
+node scripts/inspect-db.js backups\fittrack_2026-07-25_141436.db
+```
+
+### Yedek alma
+
+```powershell
+.\scripts\backup.ps1            # son 10 yedek saklanır
+.\scripts\backup.ps1 -Keep 30
+```
+
+Canlı veritabanını `backups/` klasörüne tarih damgalı indirir, dosyanın gerçekten
+geçerli bir SQLite veritabanı olduğunu doğrular (yarım inen dosyayı yedek saymaz) ve
+eskileri budar. `backups/` git tarafından yok sayılır.
+
+Önkoşul: `railway login`, `railway link` ve `railway ssh keys add` — volume dosya
+erişimi SSH üzerinden çalışır.
+
+### Yerel veriyi buluta taşıma
+
+Canlı ortama geçerken yerel veritabanını yüklemek için:
+
+```powershell
+# 1. Calisan uygulama varken tutarli anlik goruntu al (duz kopya yarim islem yakalayabilir)
+#    VACUUM INTO kullan — bkz. scripts/inspect-db.js ile dogrulama
+# 2. Yukle
+railway volume files --volume fittrack-volume upload <yerel.db> /var/data/fittrack.db --overwrite
+# 3. Servisi yeniden baslat ki yeni dosyayi acsin
+railway redeploy --yes
+```
+
+---
+
 ## Environment variables
 
 ### Backend (`FitTrack.API`)
