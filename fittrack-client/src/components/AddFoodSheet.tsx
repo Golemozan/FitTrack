@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 import { useLogFood, useUpdateMeal } from "../hooks/useNutrition";
 import { FREQUENT_FOODS, searchFoods } from "../data/frequentFoods";
 import type { Food } from "../data/frequentFoods";
+import { IconButton } from "./ui";
 import type { MealEntry, MealType } from "../types";
 
 const MEAL_OPTIONS: { tr: string; type: MealType }[] = [
@@ -13,6 +14,12 @@ const MEAL_OPTIONS: { tr: string; type: MealType }[] = [
 ];
 
 const PORTIONS = [50, 100, 150, 200, 250, 300];
+
+/** Selectable tile / pill. Soft when idle, soft-accent when chosen. */
+const choiceCls = (active: boolean) =>
+  `flex h-11 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
+    active ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/40" : "bg-white/[0.04] text-neutral-300 hover:bg-white/[0.08]"
+  }`;
 
 // Per-gram macro basis so any picked food scales to arbitrary grams.
 interface Picked {
@@ -133,35 +140,26 @@ export default function AddFoodSheet({
 
   return (
     <div className="fixed inset-0 z-[60]">
-      {/* backdrop */}
       <div
         onClick={close}
-        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-ink/70 backdrop-blur-sm transition-opacity duration-300 ${
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
-      {/* sheet */}
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl transition-transform duration-300 dark:bg-card ${
+        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-3xl border-t border-white/[0.07] bg-panel p-5 shadow-2xl shadow-black/50 transition-transform duration-300 ${
           shown ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 truncate text-lg font-semibold text-neutral-100">
             {step === 1 ? "Yemek ekle" : editEntry ? `Düzenle · ${picked?.name}` : picked?.name}
           </h2>
-          <button onClick={close} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            <X size={22} />
-          </button>
+          <IconButton icon={X} size={19} onClick={close} aria-label="Kapat" />
         </div>
 
         {step === 1 ? (
-          <Step1
-            rawQuery={rawQuery}
-            setRawQuery={setRawQuery}
-            results={results}
-            onPick={pick}
-          />
+          <Step1 rawQuery={rawQuery} setRawQuery={setRawQuery} results={results} onPick={pick} />
         ) : (
           <Step2
             grams={grams}
@@ -191,65 +189,53 @@ function Step1({
   onPick: (p: Picked) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-card2">
-        <Search size={18} className="text-slate-400" />
+    <div className="space-y-5">
+      <div className="relative">
+        <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
         <input
           autoFocus
           value={rawQuery}
           onChange={(e) => setRawQuery(e.target.value)}
           placeholder="200g tavuk göğsü"
-          className="w-full bg-transparent text-sm outline-none"
+          className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/25 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35"
         />
       </div>
 
-      {/* frequent foods grid */}
       <div>
-        <div className="mb-2 text-xs font-semibold uppercase text-slate-400">Sık kullanılan</div>
+        <div className="eyebrow mb-2.5 text-[11px] text-neutral-500">Sık kullanılan</div>
         <div className="grid grid-cols-4 gap-2">
           {FREQUENT_FOODS.map((f) => (
             <button
               key={f.name}
-              onClick={() =>
-                onPick({
-                  name: f.name,
-                  perG: {
-                    calories: f.per100.calories / 100,
-                    protein: f.per100.protein / 100,
-                    carbs: f.per100.carbs / 100,
-                    fat: f.per100.fat / 100,
-                  },
-                })
-              }
-              className="flex flex-col items-center gap-1 rounded-xl bg-slate-50 p-2 text-center transition-colors hover:bg-slate-100 dark:bg-card2 dark:hover:bg-white/10"
+              onClick={() => onPick(fromFood(f))}
+              className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.04] p-2.5 text-center transition-colors hover:bg-white/[0.08]"
             >
               <span className="text-2xl">{f.emoji}</span>
-              <span className="text-[11px] font-medium leading-tight">{f.name}</span>
-              <span className="text-[10px] text-slate-400">{f.per100.calories} kcal</span>
+              <span className="text-[11px] font-medium leading-tight text-neutral-200">{f.name}</span>
+              <span className="text-[11px] tabular-nums text-neutral-500">{f.per100.calories} kcal</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* search results (local, instant) */}
       {rawQuery.trim().length > 0 && (
         <div>
-          <div className="mb-2 text-xs font-semibold uppercase text-slate-400">Arama sonuçları</div>
+          <div className="eyebrow mb-2.5 text-[11px] text-neutral-500">Arama sonuçları</div>
           {results.length === 0 ? (
-            <p className="py-3 text-center text-sm text-slate-400">Sonuç yok.</p>
+            <p className="py-3 text-center text-sm text-neutral-600">Sonuç yok.</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {results.map((f) => (
                 <li key={f.name}>
                   <button
                     onClick={() => onPick(fromFood(f))}
-                    className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 dark:bg-card2 dark:hover:bg-white/10"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.08]"
                   >
-                    <span className="flex items-center gap-2 text-sm font-medium">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-neutral-100">
                       <span className="text-lg">{f.emoji}</span>
-                      {f.name}
+                      <span className="truncate">{f.name}</span>
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="shrink-0 text-[11px] tabular-nums text-neutral-500">
                       {f.per100.calories} kcal · 100g
                     </span>
                   </button>
@@ -285,64 +271,48 @@ function Step2({
   return (
     <div className="space-y-5">
       <div className="text-center">
-        <div className="num text-5xl text-accent">{grams} <span className="text-2xl text-neutral-400">g</span></div>
+        <span className="num text-5xl text-neutral-100">{grams}</span>
+        <span className="num ml-1 text-2xl font-normal text-neutral-500">g</span>
       </div>
 
-      <div className="grid grid-cols-6 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {PORTIONS.map((p) => (
-          <button
-            key={p}
-            onClick={() => setGrams(p)}
-            className={`rounded-xl py-2 text-sm font-semibold transition-colors ${
-              grams === p
-                ? "bg-accent text-accentink"
-                : "bg-black/[0.05] text-neutral-600 dark:bg-card2 dark:text-neutral-300"
-            }`}
-          >
+          <button key={p} onClick={() => setGrams(p)} className={choiceCls(grams === p)}>
             {p}
           </button>
         ))}
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">Özel miktar (g)</span>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="text-neutral-400">Özel miktar (g)</span>
         <input
           type="number"
+          inputMode="numeric"
           value={grams}
           onChange={(e) => setGrams(Math.max(0, Number(e.target.value) || 0))}
-          className="rounded-xl border border-black/10 bg-white px-3 py-2 outline-none focus:border-accent dark:border-hair dark:bg-card2"
+          className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/25 px-3 text-sm tabular-nums text-neutral-100 outline-none transition-colors focus:border-accent/50 focus:bg-black/35"
         />
       </label>
 
-      {/* meal type pill toggle */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {MEAL_OPTIONS.map((o) => (
-          <button
-            key={o.type}
-            onClick={() => setMeal(o.type)}
-            className={`rounded-full py-2 text-xs font-semibold transition-colors ${
-              meal === o.type
-                ? "bg-accent text-accentink"
-                : "bg-black/[0.05] text-neutral-600 dark:bg-card2 dark:text-neutral-300"
-            }`}
-          >
+          <button key={o.type} onClick={() => setMeal(o.type)} className={choiceCls(meal === o.type)}>
             {o.tr}
           </button>
         ))}
       </div>
 
-      {/* live macro preview */}
-      <div className="grid grid-cols-4 gap-2 rounded-2xl bg-black/[0.04] p-3 text-center dark:bg-card2">
-        <Preview label="kcal" value={preview.calories} className="text-neutral-900 dark:text-neutral-100" />
-        <Preview label="Protein" value={`${preview.protein}g`} className="text-pro" />
-        <Preview label="Karb" value={`${preview.carbs}g`} className="text-carb" />
-        <Preview label="Yağ" value={`${preview.fat}g`} className="text-fat" />
+      <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/[0.06] bg-black/20 p-3.5 text-center">
+        <Preview label="kcal" value={preview.calories} className="text-neutral-100" />
+        <Preview label="Protein" value={`${preview.protein}g`} className="text-pro/90" />
+        <Preview label="Karb" value={`${preview.carbs}g`} className="text-carb/90" />
+        <Preview label="Yağ" value={`${preview.fat}g`} className="text-fat/90" />
       </div>
 
       <button
         onClick={onSubmit}
         disabled={pending || grams <= 0}
-        className="w-full rounded-2xl bg-accent py-3 text-base font-bold text-accentink shadow-glow transition-all hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
+        className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accentink transition-all hover:brightness-110 disabled:opacity-40"
       >
         {submitLabel}
       </button>
@@ -353,8 +323,8 @@ function Step2({
 function Preview({ label, value, className }: { label: string; value: React.ReactNode; className?: string }) {
   return (
     <div>
-      <div className={`text-lg font-bold ${className}`}>{value}</div>
-      <div className="text-[10px] uppercase text-slate-400">{label}</div>
+      <div className={`num text-lg ${className}`}>{value}</div>
+      <div className="eyebrow mt-1 text-[10px] text-neutral-600">{label}</div>
     </div>
   );
 }
