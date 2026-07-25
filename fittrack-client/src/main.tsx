@@ -4,6 +4,7 @@ import { keepPreviousData, QueryClient, QueryClientProvider } from "@tanstack/re
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import ToastContainer from "./components/Toast";
+import AuthGate from "./components/AuthGate";
 import App from "./App";
 import "./index.css";
 
@@ -27,7 +28,9 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastProvider>
-          <App />
+          <AuthGate>
+            <App />
+          </AuthGate>
           <ToastContainer />
         </ToastProvider>
       </ThemeProvider>

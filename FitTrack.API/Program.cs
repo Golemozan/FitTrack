@@ -17,10 +17,19 @@ var dbPath = Path.Combine(
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
+// Tarayıcı erişimi sadece bilinen origin'lere. ALLOWED_ORIGINS virgülle ayrılır,
+// örn. "https://fittrack.vercel.app". Verilmezse: yerelde serbest, üretimde kapalı.
+var allowedOrigins = (Environment.GetEnvironmentVariable("ALLOWED_ORIGINS") ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(CorsPolicy, policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+    {
+        policy.AllowAnyHeader().AllowAnyMethod();
+        if (allowedOrigins.Length > 0) policy.WithOrigins(allowedOrigins);
+        else if (builder.Environment.IsDevelopment()) policy.SetIsOriginAllowed(_ => true);
+    });
 });
 
 builder.Services.AddControllers()
@@ -71,8 +80,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors(CorsPolicy);
+app.UseMiddleware<FitTrack.API.Middleware.ApiKeyMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
+
+// Platform sağlık kontrolü — anahtar istemez, veri sızdırmaz.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 app.Run($"http://0.0.0.0:{port}");

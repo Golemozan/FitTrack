@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Clock, Dumbbell, Flame, HeartPulse, Scale, Sparkles, Target, UtensilsCrossed } from "lucide-react";
+import { Clock, Dumbbell, Flame, HeartPulse, Lock, Scale, Sparkles, Target, UtensilsCrossed } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { lockApp } from "./api/auth";
 import CoachChat from "./components/CoachChat";
 import CoachHistory from "./components/CoachHistory";
 import Overlay from "./components/Overlay";
@@ -41,8 +42,17 @@ export default function App() {
               <div className="mt-1 text-xs capitalize text-neutral-500">{today}</div>
             </div>
           </div>
-          <div className="hidden items-center gap-2 rounded-full border border-hair bg-white/[0.04] px-3 py-1.5 text-xs text-neutral-400 sm:flex">
-            <Sparkles size={13} className="text-accent" /> Koç aktif · Haiku
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 rounded-full border border-hair bg-white/[0.04] px-3 py-1.5 text-xs text-neutral-400 sm:flex">
+              <Sparkles size={13} className="text-accent" /> Koç aktif · Haiku
+            </div>
+            <button
+              onClick={lockApp}
+              className="rounded-full border border-hair bg-white/[0.04] p-2 text-neutral-500 transition-colors hover:text-accent"
+              title="Kilitle"
+            >
+              <Lock size={14} />
+            </button>
           </div>
         </header>
 

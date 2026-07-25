@@ -88,8 +88,13 @@ public class TelegramBotService : BackgroundService
         using var scope = _scope.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        // Chat id'yi kaydet — proaktif mesajlar için.
-        await SaveChatIdAsync(db, chatId.Value);
+        // Sahiplik kontrolü — bot kullanıcı adı herkese açık aranabilir, veri sadece sahibinin.
+        if (!await IsOwnerAsync(db, chatId.Value))
+        {
+            _log.LogWarning("Yetkisiz Telegram sohbeti reddedildi: {ChatId}", chatId);
+            await SendTelegram(token, chatId.Value, "Bu bot kişisel kullanım için. Erişimin yok.");
+            return;
+        }
 
         if (text.StartsWith("/start"))
         {
@@ -134,16 +139,25 @@ public class TelegramBotService : BackgroundService
         }
     }
 
-    static async Task SaveChatIdAsync(AppDbContext db, long chatId)
+    /// <summary>
+    /// Sahip <c>Telegram:ChatId</c> ile açıkça belirlenir. Belirlenmediyse ilk yazan sohbet
+    /// sahiplenir ve bir daha değişmez — yabancı biri gelip proaktif mesajları üstüne alamaz.
+    /// </summary>
+    async Task<bool> IsOwnerAsync(AppDbContext db, long chatId)
     {
+        if (long.TryParse(_cfg["Telegram:ChatId"], out var configured))
+            return configured == chatId;
+
         var setting = await db.AppSettings.FindAsync(ChatIdKey);
-        var val = chatId.ToString();
         if (setting is null)
-            db.AppSettings.Add(new AppSetting { Key = ChatIdKey, Value = val });
-        else if (setting.Value != val)
-            setting.Value = val;
-        else return;
-        await db.SaveChangesAsync();
+        {
+            db.AppSettings.Add(new AppSetting { Key = ChatIdKey, Value = chatId.ToString() });
+            await db.SaveChangesAsync();
+            _log.LogInformation("Telegram sahibi bu sohbete bağlandı: {ChatId}", chatId);
+            return true;
+        }
+
+        return setting.Value == chatId.ToString();
     }
 
     public static async Task SendTelegram(string token, long chat, string text)

@@ -1,8 +1,9 @@
 # FitTrack
 
-Kişisel sağlık takip uygulaması — beslenme, antrenman ve kilo takibi. Tek kullanıcı, auth yok.
+Kişisel sağlık takip uygulaması — beslenme, antrenman ve kilo takibi. Tek kullanıcı,
+tek parola ile korunur (bkz. [Erişim koruması](#erişim-koruması)).
 
-- **Backend** — `FitTrack.API` (ASP.NET Core 8, EF Core, PostgreSQL)
+- **Backend** — `FitTrack.API` (ASP.NET Core 8, EF Core, SQLite)
 - **Frontend** — `fittrack-client` (React + Vite + TypeScript + Tailwind, React Query, Recharts)
 
 Özellikler: makro halkası + öğün takibi (yerel besin veritabanı, ~130 besin, API yok), set-bazlı antrenman kaydı
@@ -29,9 +30,9 @@ Kişisel sağlık takip uygulaması — beslenme, antrenman ve kilo takibi. Tek 
 cd FitTrack/FitTrack.API
 ```
 
-Yerelde kurulum yok. `DATABASE_URL` **verilmezse** uygulama otomatik olarak bir **SQLite**
-dosyası (`fittrack.db`) kullanır — sunucu/port yok, ilk açılışta şema oluşturulur ve
-`UserGoals` varsayılanları seed edilir. `DATABASE_URL` verilirse (deploy) Postgres kullanılır.
+Veritabanı kurulumu yok. Uygulama her ortamda **SQLite** kullanır (`fittrack.db`) — ilk
+açılışta şema oluşturulur (`EnsureCreated`) ve `UserGoals` varsayılanları seed edilir.
+Dosya, `/var/data` dizini varsa oraya (kalıcı disk), yoksa uygulama binary'sinin yanına yazılır.
 
 ```bash
 dotnet run
@@ -52,44 +53,99 @@ Client: `http://localhost:5173`. API adresi `.env` içindeki `VITE_API_URL` (var
 
 ---
 
+## Erişim koruması
+
+Uygulama internete açıldığında verinin önünde tek bir kapı vardır: `FITTRACK_API_KEY`.
+
+- `/api/*` altındaki **her** istek `X-Api-Key` başlığı ister. Eşleşmezse `401`.
+- Karşılaştırma sabit sürelidir (`CryptographicOperations.FixedTimeEquals`) — cevap
+  gecikmesinden anahtar sızmaz.
+- Anahtar sunucuda **tanımlı değilse**: `Development` ortamında kapı açık kalır (yerel
+  geliştirme bozulmaz), `Production` ortamında API tamamen kapanır ve `503` döner.
+  Yani yanlışlıkla korumasız yayına çıkmak mümkün değil.
+- `/health` anahtar istemez (platform sağlık kontrolü için), veri döndürmez.
+- Tarayıcı tarafında parola bir kez girilir, `localStorage`'da saklanır ve her isteğe
+  eklenir. Herhangi bir istek `401` alırsa saklanan anahtar silinir ve kilit ekranı döner.
+- Anthropic anahtarı frontend'e **hiç** çıkmaz — `CoachController` backend'de proxy'ler.
+
+Anahtar üret:
+
+```bash
+openssl rand -base64 24
+```
+
+Telegram botu ayrı bir kapıdır: `Telegram:ChatId` verilirse sadece o sohbet kabul edilir.
+Verilmezse **ilk yazan** sohbet sahiplenir ve bir daha değişmez — yabancı biri botu bulup
+veriyi okuyamaz veya proaktif mesajları üstüne alamaz.
+
+---
+
 ## Environment variables
 
 ### Backend (`FitTrack.API`)
 
 | Değişken | Açıklama | Varsayılan |
 |---|---|---|
-| `DATABASE_URL` | Postgres URI (`postgresql://user:pass@host:port/db`). Verilirse Npgsql formatına çevrilip kullanılır; verilmezse `appsettings.json` connection string'i. SSL zorunlu kılınır. | — |
+| `FITTRACK_API_KEY` | API parolası. Üretimde **zorunlu** — yoksa API `503` ile kapalı kalır. | — |
+| `ALLOWED_ORIGINS` | Virgülle ayrılmış izinli tarayıcı origin'leri (`https://fittrack.vercel.app`). Verilmezse: yerelde serbest, üretimde hiçbir origin. | — |
+| `ANTHROPIC_API_KEY` | Koç için Anthropic anahtarı. Yerelde `dotnet user-secrets` (`Anthropic:ApiKey`) da olur. | — |
+| `Telegram__BotToken` | Telegram bot token'ı. Verilmezse bot ve proaktif koç kapalı. | — |
+| `Telegram__ChatId` | İzinli Telegram sohbeti. Verilmezse ilk yazan sohbet sahiplenir. | — |
 | `PORT` | Uygulamanın bind olacağı port (`0.0.0.0:$PORT`). | `5000` |
+
+> .NET'te iç içe config anahtarları ortam değişkeninde çift alt çizgi ile yazılır:
+> `Telegram:BotToken` → `Telegram__BotToken`.
 
 ### Frontend (`fittrack-client`)
 
 | Değişken | Açıklama | Varsayılan |
 |---|---|---|
-| `VITE_API_URL` | Backend API base URL'i (örn. `https://app.railway.app/api`). | `http://localhost:5000/api` |
+| `VITE_API_URL` | Backend API base URL'i (örn. `https://fittrack.up.railway.app/api`). | `http://127.0.0.1:5000/api` |
 
 `.env` → local dev · `.env.production` → prod build (`npm run build`).
+Parola `.env`'e **yazılmaz** — kullanıcı tarayıcıda girer.
 
 ---
 
 ## Deploy
 
-### Backend → Railway
+Domain satın almak gerekmez — her iki platform da ücretsiz alt alan adı ve HTTPS verir.
+Telefondan tarayıcıyla Vercel adresine girilir, "Ana Ekrana Ekle" ile uygulama gibi durur.
 
-1. Yeni proje → **PostgreSQL** plugin ekle (Railway `DATABASE_URL` sağlar).
-2. Repo'yu bağla, root: `FitTrack/FitTrack.API` (Nixpacks .NET'i otomatik build eder).
-3. Variables: gerekli değil (besin verisi yerel). `PORT` Railway tarafından otomatik verilir.
-4. Deploy. Başlangıçta migration otomatik çalışır. Domain'i not al (`https://xxx.railway.app`).
+### 1. Backend → Railway
 
-`Program.cs` içindeki `app.Run("http://0.0.0.0:" + PORT)` bind'i ve `DATABASE_URL` → Npgsql
-dönüşümü Railway ile uyumludur. CORS `AllowAll` olduğu için Vercel origin'i sorunsuz erişir.
+Railway seçilmesinin nedeni: SQLite dosyasının yaşaması için **kalıcı disk** ve Telegram
+polling'i ile 14:00/21:00 proaktif mesajları için **uyumayan** bir servis gerekiyor.
+Ücretsiz katmanda uyuyan bir platform (ör. Render free) her ikisini de bozar.
 
-### Frontend → Vercel
+1. Repo'yu bağla, **Root Directory**: repo kökü (kökteki `Dockerfile` API'yi build eder).
+2. **Volume** ekle, mount path: `/var/data`. `Program.cs` bu dizin varsa veritabanını
+   oraya yazar; disk olmazsa veri her deploy'da sıfırlanır.
+3. Variables:
+   - `FITTRACK_API_KEY` = ürettiğin parola (**zorunlu**, yoksa API kapalı kalır)
+   - `ANTHROPIC_API_KEY` = koç anahtarı
+   - `Telegram__BotToken`, `Telegram__ChatId` (bot kullanılacaksa)
+   - `PORT` Railway tarafından otomatik verilir, elle girme.
+4. Deploy et, domain'i not al (`https://xxx.up.railway.app`).
+5. `https://xxx.up.railway.app/health` → `{"status":"ok"}` dönmeli.
 
-1. Repo'yu import et, **Root Directory**: `FitTrack/fittrack-client`.
-2. Environment variable: `VITE_API_URL = https://<railway-domain>/api`
-   (veya `.env.production` dosyasını güncelle).
-3. Build `npm run build`, output `dist`. `vercel.json` SPA rewrite'ı client-side routing için hazır.
-4. Deploy.
+### 2. Frontend → Vercel
+
+1. Repo'yu import et, **Root Directory**: `fittrack-client`.
+2. Environment variable: `VITE_API_URL = https://xxx.up.railway.app/api`
+3. Build `npm run build`, output `dist`. `vercel.json` SPA rewrite'ı hazır.
+4. Deploy et, domain'i not al (`https://xxx.vercel.app`).
+
+### 3. Kapıyı kapat
+
+Railway'e dön, `ALLOWED_ORIGINS = https://xxx.vercel.app` ekle ve yeniden deploy et.
+Bu adım atlanırsa tarayıcı istekleri CORS'a takılır.
+
+Doğrulama — anahtarsız istek `401` dönmeli:
+
+```bash
+curl -i https://xxx.up.railway.app/api/goals
+```
 
 ---
 
