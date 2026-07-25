@@ -79,6 +79,11 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex) { app.Logger.LogError(ex, "DB init failed."); }
 }
 
+// Arayüz aynı imajdan servis edilir (wwwroot). Statik dosyalar korumasızdır —
+// içlerinde veri yok, kilit ekranı zaten uygulamanın içinde.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseCors(CorsPolicy);
 app.UseMiddleware<FitTrack.API.Middleware.ApiKeyMiddleware>();
 app.UseAuthorization();
@@ -86,6 +91,10 @@ app.MapControllers();
 
 // Platform sağlık kontrolü — anahtar istemez, veri sızdırmaz.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// SPA geri düşüşü: /api dışındaki her yol index.html döner ki istemci
+// tarafı yönlendirme sayfa yenilendiğinde de çalışsın.
+app.MapFallbackToFile("index.html");
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 app.Run($"http://0.0.0.0:{port}");
