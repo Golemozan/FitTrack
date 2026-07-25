@@ -13,9 +13,16 @@ import {
 } from "../hooks/useWorkout";
 import { useToast } from "../hooks/useToast";
 import AddExerciseSheet from "../components/AddExerciseSheet";
-import { Card, EmptyState, ListSkeleton, SectionTitle } from "../components/ui";
+import { Card, Chip, EmptyState, IconButton, ListSkeleton, SectionTitle } from "../components/ui";
 import { SectionHeader } from "../components/SectionHeader";
 import type { Exercise, ExerciseSet } from "../types";
+
+/**
+ * Every set row and its header share this template, so the column labels sit
+ * exactly over the fields they describe. The last track is `auto` — the action
+ * column holds two 36px buttons and must not be squeezed into a fixed 2rem.
+ */
+const SET_GRID = "grid grid-cols-[1.75rem_1fr_1fr_auto] items-center gap-2";
 
 export default function WorkoutSection() {
   const today = useTodaySession();
@@ -57,16 +64,21 @@ export default function WorkoutSection() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {isLoading ? (
-            <Card><ListSkeleton rows={4} /></Card>
+            <Card>
+              <ListSkeleton rows={3} height="h-24" />
+            </Card>
           ) : !session ? (
             <Card>
-              <EmptyState icon={Dumbbell} title="Seans oluşturulamadı">
-                Kapatıp tekrar açmayı dene.
+              {/* A real failure — kept visually distinct from an empty workout. */}
+              <EmptyState icon={X} tone="error" title="Seans oluşturulamadı">
+                Bağlantıyı kontrol et, sonra kapatıp tekrar aç.
               </EmptyState>
             </Card>
           ) : session.exercises.length === 0 ? (
             <Card>
-              <EmptyState icon={Plus}>Egzersiz eklemeye başla.</EmptyState>
+              <EmptyState icon={Dumbbell} title="Antrenman boş">
+                Yukarıdaki Egzersiz Ekle ile ilk hareketini seç.
+              </EmptyState>
             </Card>
           ) : (
             <div className="grid gap-3 xl:grid-cols-2">
@@ -77,26 +89,28 @@ export default function WorkoutSection() {
           )}
         </div>
 
-        <aside className="space-y-4 lg:col-span-1">
+        <aside className="lg:col-span-1">
           <Card>
-            <SectionTitle accent="orange">Son antrenmanlar</SectionTitle>
+            <SectionTitle>Son antrenmanlar</SectionTitle>
             {recent.isLoading ? (
               <ListSkeleton rows={3} />
             ) : recent.data?.length === 0 ? (
-              <EmptyState>Kayıt yok.</EmptyState>
+              <EmptyState icon={Dumbbell} title="Kayıt yok">
+                Tamamladığın seanslar burada birikir.
+              </EmptyState>
             ) : (
-              <ul className="divide-y divide-white/10">
+              <ul className="divide-y divide-white/[0.06]">
                 {recent.data?.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between py-2.5 text-sm">
-                    <div>
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-xs text-neutral-400">
+                  <li key={s.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-neutral-200">{s.name}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">
                         {new Date(s.loggedAt).toLocaleDateString("tr-TR")}
                       </div>
                     </div>
-                    <span className="rounded-full bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
+                    <Chip tone="accent" className="shrink-0">
                       {s.exerciseCount} hareket
-                    </span>
+                    </Chip>
                   </li>
                 ))}
               </ul>
@@ -163,8 +177,8 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
   };
 
   return (
-    <Card>
-      <div className="mb-3 flex items-start justify-between gap-2">
+    <Card flat className="p-4">
+      <div className="mb-4 flex items-start justify-between gap-2">
         {editing ? (
           <div className="flex flex-1 items-center gap-2">
             <input
@@ -172,77 +186,81 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveName()}
               autoFocus
-              className="min-w-0 flex-1 rounded-lg border border-hair bg-card2 px-2 py-1 font-bold outline-none focus:border-accent"
+              className="h-9 min-w-0 flex-1 rounded-xl border border-white/[0.07] bg-black/25 px-3 text-sm font-semibold text-neutral-100 outline-none transition-colors focus:border-accent/50"
             />
-            <button onClick={saveName} className="rounded-lg bg-accent p-1.5 text-accentink" aria-label="Kaydet">
-              <Check size={15} />
-            </button>
-            <button
-              onClick={() => { setName(exercise.name); setEditing(false); }}
-              className="rounded-lg bg-card2 p-1.5 text-neutral-400"
+            <IconButton icon={Check} tone="accent" size={15} onClick={saveName} aria-label="Kaydet" />
+            <IconButton
+              icon={X}
+              size={15}
+              onClick={() => {
+                setName(exercise.name);
+                setEditing(false);
+              }}
               aria-label="Vazgeç"
-            >
-              <X size={15} />
-            </button>
+            />
           </div>
         ) : (
           <>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-bold">{exercise.name}</span>
-                {isPR && (
-                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accentink">
-                    PR
-                  </span>
-                )}
+                <span className="truncate text-[15px] font-semibold text-neutral-100">{exercise.name}</span>
+                {isPR && <Chip tone="accent">PR</Chip>}
               </div>
-              <div className="mt-1 flex items-center gap-2">
-                <span className="inline-block rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-                  {exercise.muscleGroup}
-                </span>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Chip>{exercise.muscleGroup}</Chip>
                 {exVolume > 0 && (
-                  <span className="text-[11px] text-neutral-400">
-                    <span className="num text-neutral-300">{Math.round(exVolume)}</span> kg
+                  <span className="text-[11px] text-neutral-500">
+                    <span className="num text-neutral-400">{Math.round(exVolume)}</span> kg hacim
                   </span>
                 )}
               </div>
             </div>
-            <div className="relative">
-              <button
+            <div className="relative shrink-0">
+              <IconButton
+                icon={MoreHorizontal}
+                size={17}
                 onClick={() => setMenuOpen((v) => !v)}
-                className="rounded-lg p-1 text-neutral-400 hover:bg-white/5"
                 aria-label="Menü"
-              >
-                <MoreHorizontal size={18} />
-              </button>
+              />
               {menuOpen && (
-                <div className="absolute right-0 top-8 z-10 w-32 overflow-hidden rounded-xl border border-white/10 bg-card2 shadow-lg">
-                  <button
-                    onClick={() => { setMenuOpen(false); setName(exercise.name); setEditing(true); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-white/5"
-                  >
-                    <Pencil size={14} /> Düzenle
-                  </button>
-                  <button
-                    onClick={() => { setMenuOpen(false); deleteExercise.mutate(exercise.id); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gain hover:bg-white/5"
-                  >
-                    <Trash2 size={14} /> Sil
-                  </button>
-                </div>
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-10 z-20 w-36 overflow-hidden rounded-xl border border-white/[0.07] bg-card2 shadow-xl shadow-black/40">
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setName(exercise.name);
+                        setEditing(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-neutral-200 transition-colors hover:bg-white/[0.06]"
+                    >
+                      <Pencil size={14} /> Düzenle
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        deleteExercise.mutate(exercise.id);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-gain transition-colors hover:bg-gain/10"
+                    >
+                      <Trash2 size={14} /> Sil
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </>
         )}
       </div>
 
-      <div className="grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2 px-1 text-[11px] font-semibold uppercase text-neutral-400">
-        <span>Set</span>
-        <span>Kg</span>
-        <span>Tekrar</span>
-        <span></span>
+      <div className={`${SET_GRID} mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-600`}>
+        <span className="text-center">Set</span>
+        <span className="text-center">Kg</span>
+        <span className="text-center">Tekrar</span>
+        <span className="w-[76px]" />
       </div>
-      <div className="mt-1 space-y-1">
+
+      <div className="space-y-1.5">
         {sortedSets.map((s) => (
           <SetRow key={s.id} set={s} ghost={ghost.get(s.setNumber)} />
         ))}
@@ -251,9 +269,9 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
       <button
         onClick={addNext}
         disabled={addSet.isPending}
-        className="mt-2 flex items-center gap-1 px-1 text-sm font-medium text-accent"
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
       >
-        <Plus size={14} /> Set Ekle
+        <Plus size={15} /> Set Ekle
       </button>
     </Card>
   );
@@ -271,45 +289,49 @@ function SetRow({ set, ghost }: { set: ExerciseSet; ghost?: ExerciseSet }) {
       body: { weightKg: Number(weight) || 0, reps: Number(reps) || 0, isCompleted: completed },
     });
 
+  // Height, not vertical padding — keeps the field exactly as tall as the 36px
+  // buttons beside it so the row reads as one aligned band.
   const inputCls =
-    "w-full rounded-lg border border-hair bg-card2 px-2 py-1.5 text-center text-sm outline-none focus:border-accent placeholder:italic placeholder:text-neutral-500";
+    "h-10 w-full rounded-xl border border-white/[0.07] bg-black/25 text-center text-sm tabular-nums text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35";
 
   return (
-    <div className="grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2">
-      <span className="text-center text-sm text-neutral-400">{set.setNumber}</span>
+    <div className={`${SET_GRID} ${set.isCompleted ? "opacity-70" : ""}`}>
+      <span className="num text-center text-[13px] text-neutral-500">{set.setNumber}</span>
       <input
         type="number"
+        inputMode="decimal"
         value={weight}
         placeholder={ghost ? String(ghost.weightKg) : "0"}
         onChange={(e) => setWeight(e.target.value)}
         onBlur={() => commit()}
         className={inputCls}
+        aria-label={`Set ${set.setNumber} ağırlık`}
       />
       <input
         type="number"
+        inputMode="numeric"
         value={reps}
         placeholder={ghost ? String(ghost.reps) : "0"}
         onChange={(e) => setReps(e.target.value)}
         onBlur={() => commit()}
         className={inputCls}
+        aria-label={`Set ${set.setNumber} tekrar`}
       />
-      <div className="flex items-center justify-end gap-1">
-        <button
+      <div className="flex items-center gap-1">
+        <IconButton
+          icon={Check}
+          size={15}
+          tone={set.isCompleted ? "active" : "default"}
           onClick={() => commit(!set.isCompleted)}
-          className={`rounded-full p-1.5 transition-colors ${
-            set.isCompleted ? "bg-accent text-accentink" : "bg-card2 text-neutral-400"
-          }`}
-          aria-label="Tamamlandı"
-        >
-          <Check size={13} />
-        </button>
-        <button
+          aria-label={set.isCompleted ? "Tamamlandı işaretini kaldır" : "Tamamlandı işaretle"}
+        />
+        <IconButton
+          icon={Trash2}
+          size={15}
+          tone="danger"
           onClick={() => deleteSet.mutate(set.id)}
-          className="text-neutral-400 hover:text-gain"
           aria-label="Seti sil"
-        >
-          <Trash2 size={13} />
-        </button>
+        />
       </div>
     </div>
   );
