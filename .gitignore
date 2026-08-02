@@ -6,6 +6,11 @@ obj/
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
+
+# uretim sirlari — repo public, buraya gercek anahtar yazilmaz
+FitTrack.API/appsettings.Production.json
 
 # build artefaktlari
 *.tsbuildinfo
