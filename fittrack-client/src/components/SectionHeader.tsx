@@ -19,10 +19,10 @@ export function SectionHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 ${className}`}>
-      <h2 className="flex items-center gap-2.5 font-cond text-xl font-bold uppercase tracking-wide text-neutral-100">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/12 text-accent">
-          <Icon size={18} strokeWidth={2.25} />
+    <div className={`flex flex-wrap items-center justify-between gap-3 pr-12 ${className}`}>
+      <h2 className="flex min-w-0 items-center gap-3 text-2xl font-bold leading-tight text-white sm:text-3xl">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+          <Icon size={20} strokeWidth={2.25} />
         </span>
         {title}
       </h2>
@@ -30,7 +30,7 @@ export function SectionHeader({
         <button
           onClick={action.onClick}
           disabled={action.disabled}
-          className="flex h-10 items-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-semibold text-accentink transition-all hover:brightness-110 disabled:opacity-40"
+          className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-xl bg-accent px-4 text-sm font-semibold text-white transition-[filter,transform] hover:brightness-110 active:scale-[.98] disabled:opacity-40"
         >
           <Plus size={16} strokeWidth={2.5} /> {action.label}
         </button>

@@ -1,0 +1,55 @@
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · macrostructure: Daily Summary · tone: quiet iOS-native · anchor hue: system-blue · contrast: pass */
+:root {
+  --paper-channels: 11% 0.004 260;
+  --paper-2-channels: 18% 0.006 260;
+  --paper-3-channels: 23% 0.007 260;
+  --ink-channels: 97% 0.003 260;
+  --ink-2-channels: 82% 0.006 260;
+  --rule-channels: 30% 0.007 260;
+  --rule-2-channels: 39% 0.008 260;
+  --muted-channels: 59% 0.009 260;
+  --neutral-channels: 70% 0.008 260;
+  --accent-channels: 67% 0.19 251;
+  --accent-soft-channels: 25% 0.065 251;
+  --accent-ink-channels: 99% 0 0;
+  --focus-channels: 73% 0.17 251;
+  --success-channels: 72% 0.17 148;
+  --danger-channels: 66% 0.22 28;
+  --protein-channels: 72% 0.15 145;
+  --carb-channels: 72% 0.14 72;
+  --fat-channels: 72% 0.14 315;
+
+  --color-paper: oklch(var(--paper-channels));
+  --color-paper-2: oklch(var(--paper-2-channels));
+  --color-paper-3: oklch(var(--paper-3-channels));
+  --color-ink: oklch(var(--ink-channels));
+  --color-ink-2: oklch(var(--ink-2-channels));
+  --color-rule: oklch(var(--rule-channels));
+  --color-rule-2: oklch(var(--rule-2-channels));
+  --color-muted: oklch(var(--muted-channels));
+  --color-neutral: oklch(var(--neutral-channels));
+  --color-accent: oklch(var(--accent-channels));
+  --color-accent-soft: oklch(var(--accent-soft-channels));
+  --color-accent-ink: oklch(var(--accent-ink-channels));
+  --color-focus: oklch(var(--focus-channels));
+  --color-success: oklch(var(--success-channels));
+  --color-danger: oklch(var(--danger-channels));
+  --color-protein: oklch(var(--protein-channels));
+  --color-carb: oklch(var(--carb-channels));
+  --color-fat: oklch(var(--fat-channels));
+
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-outlier: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+
+  --radius-input: 0.75rem;
+  --radius-card: 1.25rem;
+  --radius-panel: 1.5rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 0 oklch(100% 0 0 / 0.03), 0 12px 30px oklch(0% 0 0 / 0.16);
+  --shadow-overlay: 0 24px 80px oklch(0% 0 0 / 0.6);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 100ms;
+  --dur-short: 180ms;
+}

@@ -69,9 +69,9 @@ export default function CheckInSection() {
                         <button
                           key={n}
                           onClick={() => setVal(n)}
-                          className={`flex flex-col items-center gap-0.5 rounded-xl border py-2 text-2xl transition-all ${
+                          className={`flex flex-col items-center gap-0.5 rounded-xl border py-2 text-2xl transition-[background-color,border-color,opacity] ${
                             active
-                              ? "border-accent bg-accent/10 scale-105"
+                              ? "border-accent bg-accent/10"
                               : "border-hair bg-card2 opacity-60 hover:opacity-100"
                           }`}
                         >

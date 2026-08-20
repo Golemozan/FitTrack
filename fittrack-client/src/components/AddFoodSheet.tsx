@@ -142,12 +142,12 @@ export default function AddFoodSheet({
     <div className="fixed inset-0 z-[60]">
       <div
         onClick={close}
-        className={`absolute inset-0 bg-ink/70 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-3xl border-t border-white/[0.07] bg-panel p-5 shadow-2xl shadow-black/50 transition-transform duration-300 ${
+        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-[24px] border-t border-white/[0.07] bg-panel p-5 shadow-2xl shadow-black/50 transition-transform duration-300 ${
           shown ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -312,7 +312,7 @@ function Step2({
       <button
         onClick={onSubmit}
         disabled={pending || grams <= 0}
-        className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accentink transition-all hover:brightness-110 disabled:opacity-40"
+        className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-white transition-[filter,transform] hover:brightness-110 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitLabel}
       </button>

@@ -17,3 +17,6 @@ FitTrack.API/appsettings.Production.json
 
 # yerel veritabani yedekleri
 backups/
+
+# hallmark skill calisma durumu — arac ici log, uygulama kaynagi degil
+.hallmark/
