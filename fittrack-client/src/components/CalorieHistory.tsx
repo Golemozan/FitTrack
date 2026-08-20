@@ -73,8 +73,8 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
     });
   }, [history.data, goal]);
 
-  const grid = "#221F1A";
-  const axis = "#8A8178";
+  const grid = "var(--color-rule)";
+  const axis = "var(--color-muted)";
 
   if (history.isLoading) return <Skeleton className="h-64 w-full" />;
 
@@ -94,14 +94,14 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
           {goal > 0 && (
             <ReferenceLine
               y={goal}
-              stroke="#FF5A2C"
+              stroke="var(--color-accent)"
               strokeDasharray="6 3"
               strokeOpacity={0.6}
               label={{
                 value: `hedef ${goal}`,
                 position: "insideTopRight",
                 fontSize: 10,
-                fill: "#FF5A2C",
+                fill: "var(--color-accent)",
               }}
             />
           )}
@@ -124,7 +124,7 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
             dataKey="aboveGoal"
             name="Hedef üstü"
             stackId="cal"
-            fill="#FF5A2C"
+            fill="var(--color-danger)"
             radius={[3, 3, 0, 0]}
             maxBarSize={32}
             onClick={(data: any) => onSelectDay?.(data?.isoDate)}
@@ -135,7 +135,7 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
             dataKey="belowGoal"
             name="Hedef altı"
             stackId="cal"
-            fill="#22C55E"
+            fill="var(--color-success)"
             radius={[3, 3, 0, 0]}
             maxBarSize={32}
             onClick={(data: any) => onSelectDay?.(data?.isoDate)}
@@ -147,7 +147,7 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
             type="monotone"
             dataKey="ma7"
             name="7 günlük ort."
-            stroke="#F59E0B"
+            stroke="var(--color-protein)"
             strokeWidth={2}
             strokeDasharray="4 3"
             dot={false}
@@ -178,46 +178,47 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: "#1A1815",
-        border: "1px solid rgba(148,163,184,0.3)",
-        borderRadius: 12,
-        padding: "10px 14px",
+        background: "var(--color-ink)",
+        color: "var(--color-paper-2)",
+        border: "var(--rule-hair) solid var(--color-rule-2)",
+        borderRadius: "var(--radius-input)",
+        padding: "var(--space-xs) var(--space-sm)",
         fontSize: 12,
         minWidth: 160,
       }}
     >
-      <div style={{ fontWeight: 600, marginBottom: 4, color: "#e2e8f0" }}>{d.fullDate}</div>
+      <div style={{ fontWeight: 600, marginBottom: "var(--space-3xs)", color: "var(--color-paper-2)" }}>{d.fullDate}</div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ color: "#94a3b8" }}>Kalori</span>
+        <span style={{ color: "var(--color-rule-2)" }}>Kalori</span>
         <span style={{ fontWeight: 600 }}>
           {Math.round(d.calories)} kcal
           {goal > 0 && (
-            <span style={{ marginLeft: 4, fontSize: 11, color: diff > 0 ? "#ef4444" : diff < 0 ? "#22C55E" : "#94a3b8" }}>
+            <span style={{ marginLeft: "var(--space-3xs)", fontSize: 11, color: diff > 0 ? "var(--color-danger)" : diff < 0 ? "var(--color-success)" : "var(--color-rule-2)" }}>
               {diff > 0 ? "+" : ""}{Math.round(diff)}
             </span>
           )}
         </span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ color: "#94a3b8" }}>Protein</span>
-        <span style={{ color: "#60a5fa" }}>{Math.round(d.protein)}g</span>
+        <span style={{ color: "var(--color-rule-2)" }}>Protein</span>
+        <span style={{ color: "var(--color-protein)" }}>{Math.round(d.protein)}g</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ color: "#94a3b8" }}>Karb</span>
-        <span style={{ color: "#fbbf24" }}>{Math.round(d.carbs)}g</span>
+        <span style={{ color: "var(--color-rule-2)" }}>Karb</span>
+        <span style={{ color: "var(--color-carb)" }}>{Math.round(d.carbs)}g</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ color: "#94a3b8" }}>Yağ</span>
-        <span style={{ color: "#f472b6" }}>{Math.round(d.fat)}g</span>
+        <span style={{ color: "var(--color-rule-2)" }}>Yağ</span>
+        <span style={{ color: "var(--color-fat)" }}>{Math.round(d.fat)}g</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ color: "#94a3b8" }}>Öğün</span>
+        <span style={{ color: "var(--color-rule-2)" }}>Öğün</span>
         <span>{d.mealCount}</span>
       </div>
       {d.ma7 != null && (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginTop: 2, borderTop: "1px solid rgba(148,163,184,0.15)", paddingTop: 4 }}>
-          <span style={{ color: "#94a3b8" }}>7G Ort.</span>
-          <span style={{ color: "#F59E0B", fontWeight: 600 }}>{Math.round(d.ma7)} kcal</span>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-sm)", marginTop: "var(--space-3xs)", borderTop: "var(--rule-hair) solid var(--color-rule-2)", paddingTop: "var(--space-3xs)" }}>
+          <span style={{ color: "var(--color-rule-2)" }}>7G Ort.</span>
+          <span style={{ color: "var(--color-protein)", fontWeight: 600 }}>{Math.round(d.ma7)} kcal</span>
         </div>
       )}
     </div>

@@ -1,10 +1,8 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 /**
- * Calorie ring. The fill rides the brand cyan→violet gradient rather than a
- * one-off hex, so the largest element on the nutrition screen belongs to the
- * same colour identity as everything around it. Over-goal switches to the
- * `gain` rose — the one place on this screen allowed to read as a warning.
+ * Calorie ring. The single signal colour marks progress; over-goal switches
+ * to the semantic danger token. Decorative gradients are intentionally absent.
  */
 export default function MacroRing({ consumed, goal }: { consumed: number; goal: number }) {
   const safeGoal = goal > 0 ? goal : 1;
@@ -21,12 +19,6 @@ export default function MacroRing({ consumed, goal }: { consumed: number; goal: 
     <div className="relative mx-auto h-48 w-48">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <defs>
-            <linearGradient id="macroRingFill" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#22D3EE" />
-              <stop offset="100%" stopColor="#A855F7" />
-            </linearGradient>
-          </defs>
           <Pie
             data={data}
             dataKey="value"
@@ -38,8 +30,8 @@ export default function MacroRing({ consumed, goal }: { consumed: number; goal: 
             cornerRadius={9}
             paddingAngle={0}
           >
-            <Cell fill={over ? "#FB7185" : "url(#macroRingFill)"} />
-            <Cell fill="rgba(255,255,255,0.06)" />
+            <Cell fill={over ? "var(--color-danger)" : "var(--color-accent)"} />
+            <Cell fill="var(--color-paper-3)" />
           </Pie>
         </PieChart>
       </ResponsiveContainer>

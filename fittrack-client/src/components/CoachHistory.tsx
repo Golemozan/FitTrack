@@ -7,7 +7,7 @@ export default function CoachHistory({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex max-h-[70vh] flex-col">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Koç Geçmişi</h2>
+        <h2 className="text-2xl font-bold text-neutral-100">Koç geçmişi</h2>
         <span className="text-xs text-neutral-500">son 3 gün</span>
       </div>
 
@@ -24,8 +24,8 @@ export default function CoachHistory({ onClose }: { onClose: () => void }) {
                 <div
                   className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
                     isUser
-                      ? "bg-accent-grad text-accentink"
-                      : "border border-hair bg-white/[0.05] text-neutral-100"
+                      ? "bg-accent text-white"
+                      : "bg-card2 text-neutral-100"
                   }`}
                 >
                   {m.content}
@@ -38,7 +38,7 @@ export default function CoachHistory({ onClose }: { onClose: () => void }) {
 
       <button
         onClick={onClose}
-        className="mt-4 w-full rounded-xl border border-hair py-2 text-sm text-neutral-400 transition-colors hover:text-white"
+        className="mt-4 min-h-10 w-full rounded-[var(--radius-input)] border border-hair bg-card2 py-2 text-sm font-medium text-neutral-400 transition-colors hover:text-neutral-100"
       >
         Kapat
       </button>

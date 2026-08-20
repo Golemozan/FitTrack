@@ -12,7 +12,7 @@ import type { LucideIcon } from "lucide-react";
    FitTrack is permanently dark (see ThemeContext) — no `dark:`
    variants anywhere below. Three rules hold the screens together:
 
-   1. Radius scale: 2xl = surface, xl = control, full = pill.
+   1. Radius scale: 0–4px; circles only when the data itself is circular.
    2. One hairline, one field look. Nothing redefines them locally.
    3. The accent is a *soft* fill (accent/12–20) everywhere except
       the single primary action on a screen. Saturated fills stop
@@ -24,7 +24,7 @@ export const HAIRLINE = "border-white/[0.07]";
 
 /** One definition of what a text/number field looks like. */
 export const fieldCls =
-  "w-full rounded-xl border border-white/[0.07] bg-black/25 px-3 py-2.5 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35 disabled:opacity-40";
+  "min-h-11 w-full rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-[border-color,background-color] duration-150 placeholder:text-neutral-500 focus:border-accent focus:bg-panel disabled:cursor-not-allowed disabled:opacity-45";
 
 // Retained for source compatibility: the palette is mono-accent, so every
 // chromatic name resolves to the same brand colour.
@@ -49,10 +49,10 @@ export function Card({
   padded?: boolean;
 }) {
   const surface = flat
-    ? "border-white/[0.06] bg-white/[0.025]"
-    : "border-white/[0.08] bg-white/[0.04] shadow-lg shadow-black/20 backdrop-blur-xl";
+    ? "border-white/[0.06] bg-card2"
+    : "border-white/[0.06] bg-panel shadow-[var(--shadow-card)]";
   return (
-    <div className={`rounded-2xl border ${surface} ${padded ? "p-5" : ""} ${className}`}>{children}</div>
+    <div className={`rounded-[var(--radius-card)] border ${surface} ${padded ? "p-5" : ""} ${className}`}>{children}</div>
   );
 }
 
@@ -73,11 +73,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = "solid", className = "", ...props }: ButtonProps) {
   const base =
-    "rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+    "min-h-10 whitespace-nowrap rounded-[var(--radius-input)] px-4 py-2.5 text-sm font-semibold transition-[background-color,color,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
   const styles: Record<NonNullable<ButtonProps["variant"]>, string> = {
-    solid: "bg-accent text-accentink hover:brightness-110",
-    soft: "bg-accent/12 text-accent hover:bg-accent/20",
-    ghost: "text-neutral-300 hover:bg-white/[0.06]",
+    solid: "bg-accent text-white hover:brightness-110",
+    soft: "border border-white/[0.06] bg-card2 text-neutral-100 hover:bg-white/[0.09]",
+    ghost: "text-neutral-300 hover:bg-card2",
   };
   return <button className={`${base} ${styles[variant]} ${className}`} {...props} />;
 }
@@ -85,10 +85,10 @@ export function Button({ variant = "solid", className = "", ...props }: ButtonPr
 type IconTone = "default" | "accent" | "danger" | "active";
 
 const iconTone: Record<IconTone, string> = {
-  default: "text-neutral-400 hover:bg-white/[0.07] hover:text-neutral-100",
+  default: "border border-transparent text-neutral-400 hover:border-hair hover:bg-card2 hover:text-neutral-100",
   accent: "bg-accent/12 text-accent hover:bg-accent/20",
-  danger: "text-neutral-500 hover:bg-gain/15 hover:text-gain",
-  active: "bg-accent/20 text-accent",
+  danger: "text-neutral-500 hover:bg-gain/10 hover:text-gain",
+  active: "bg-accent text-white",
 };
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -106,7 +106,7 @@ export function IconButton({ icon: Icon, tone = "default", size = 16, className 
   return (
     <button
       type="button"
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors disabled:opacity-40 ${iconTone[tone]} ${className}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-input)] transition-[background-color,color,border-color,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${iconTone[tone]} ${className}`}
       {...props}
     >
       <Icon size={size} />
@@ -134,7 +134,7 @@ export function Segmented<T extends string | number>({
 }) {
   const pad = size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm";
   return (
-    <div className="inline-flex gap-1 rounded-xl border border-white/[0.06] bg-black/20 p-1">
+    <div className="inline-flex max-w-full gap-1 rounded-xl bg-card2 p-1">
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
@@ -143,8 +143,8 @@ export function Segmented<T extends string | number>({
             key={String(o.value)}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`flex items-center gap-1.5 rounded-lg font-medium transition-colors ${pad} ${
-              active ? "bg-accent/15 text-accent" : "text-neutral-400 hover:text-neutral-100"
+            className={`flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors ${pad} ${
+              active ? "bg-neutral-600/60 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-100"
             }`}
           >
             {Icon && <Icon size={14} />}
@@ -159,7 +159,7 @@ export function Segmented<T extends string | number>({
 type ChipTone = "neutral" | "accent" | "pro" | "carb" | "fat";
 
 const chipTone: Record<ChipTone, string> = {
-  neutral: "bg-white/[0.06] text-neutral-300",
+  neutral: "border border-hair bg-card2 text-neutral-300",
   accent: "bg-accent/12 text-accent",
   pro: "bg-pro/12 text-pro",
   carb: "bg-carb/12 text-carb",
@@ -178,7 +178,7 @@ export function Chip({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${chipTone[tone]} ${className}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${chipTone[tone]} ${className}`}
     >
       {children}
     </span>
@@ -228,7 +228,7 @@ export function Stat({
   accent?: Accent;
 }) {
   return (
-    <Card className="flex flex-col gap-1">
+    <Card className="flex min-w-0 flex-col gap-1">
       <span className="eyebrow text-[11px] text-neutral-400">{label}</span>
       <span className={`num text-2xl ${accent === "neutral" ? "text-neutral-100" : "text-accent"}`}>{value}</span>
       {sub != null && <span className="text-xs text-neutral-400">{sub}</span>}
@@ -247,8 +247,8 @@ export function ProgressBar({
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-      <div className={`h-full rounded-full transition-all duration-500 ${colorClass}`} style={{ width: `${pct}%` }} />
+    <div className="h-2 w-full overflow-hidden rounded-full bg-card2">
+      <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -278,7 +278,7 @@ export function EmptyState({
     <div className="flex flex-col items-center gap-2 py-8 text-center">
       {Icon && (
         <div
-          className={`rounded-2xl p-3 ${isError ? "bg-gain/10 text-gain" : "bg-white/[0.04] text-neutral-500"}`}
+          className={`rounded-[var(--radius-card)] p-3 ${isError ? "bg-gain/10 text-gain" : "bg-card2 text-neutral-500"}`}
         >
           <Icon size={26} strokeWidth={1.75} />
         </div>
@@ -297,7 +297,7 @@ export function EmptyLine({ children }: { children: ReactNode }) {
 }
 
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-white/[0.05] ${className}`} />;
+  return <div className={`animate-pulse rounded-lg bg-card2 ${className}`} />;
 }
 
 export function ListSkeleton({ rows = 3, height = "h-12" }: { rows?: number; height?: string }) {

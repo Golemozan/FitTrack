@@ -62,8 +62,8 @@ export default function WeightSection() {
     ? chartData.reduce((a, p) => a + p.kg, 0) / chartData.length
     : null;
 
-  const grid = "#221F1A";
-  const axis = "#8A8178";
+  const grid = "var(--color-rule)";
+  const axis = "var(--color-muted)";
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,8 +154,8 @@ export default function WeightSection() {
                 <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="weightFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FF5A2C" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#FF5A2C" stopOpacity={0} />
+                      <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={grid} />
@@ -184,9 +184,10 @@ export default function WeightSection() {
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "#1A1815",
-                      border: "1px solid rgba(148,163,184,0.3)",
-                      borderRadius: 12,
+                      background: "var(--color-ink)",
+                      color: "var(--color-paper-2)",
+                      border: "var(--rule-hair) solid var(--color-rule-2)",
+                      borderRadius: "var(--radius-input)",
                       fontSize: 12,
                     }}
                   />
@@ -194,10 +195,10 @@ export default function WeightSection() {
                     type="monotone"
                     dataKey="kg"
                     name="Kilo (kg)"
-                    stroke="#FF5A2C"
+                    stroke="var(--color-accent)"
                     strokeWidth={2.5}
                     fill="url(#weightFill)"
-                    dot={{ r: 2.5, fill: "#FF5A2C" }}
+                    dot={{ r: 2.5, fill: "var(--color-accent)" }}
                     activeDot={{ r: 5 }}
                   />
                 </AreaChart>

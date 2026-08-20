@@ -27,7 +27,7 @@ const SET_GRID = "grid grid-cols-[1.75rem_1fr_1fr_auto] items-center gap-2";
 export default function WorkoutSection() {
   const today = useTodaySession();
   const recent = useRecentSessions(10);
-  const createSession = useCreateSession();
+  const { mutate: createSession, isPending: isCreatingSession } = useCreateSession();
   const toast = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
   const didAutoStart = useRef(false);
@@ -36,18 +36,18 @@ export default function WorkoutSection() {
 
   useEffect(() => {
     if (didAutoStart.current) return;
-    if (today.isLoading || session || createSession.isPending) return;
+    if (today.isLoading || session || isCreatingSession) return;
 
     didAutoStart.current = true;
-    createSession.mutate(`Antrenman - ${new Date().toLocaleDateString("tr-TR")}`, {
+    createSession(`Antrenman - ${new Date().toLocaleDateString("tr-TR")}`, {
       onError: () => {
         toast.error("Seans oluşturulamadı");
         didAutoStart.current = false;
       },
     });
-  }, [today.isLoading, session, createSession.isPending, toast]);
+  }, [today.isLoading, session, isCreatingSession, createSession, toast]);
 
-  const isLoading = today.isLoading || createSession.isPending;
+  const isLoading = today.isLoading || isCreatingSession;
 
   return (
     <section id="antrenman" className="scroll-mt-24">

@@ -22,6 +22,7 @@ export default function CoachChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (messages.length === 0 && !chat.isPending) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, chat.isPending]);
 
@@ -86,7 +87,7 @@ export default function CoachChat() {
 
   return (
     <div className="flex h-full flex-col">
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pr-1">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         <Bubble
           role="assistant"
           content={GREETING}
@@ -108,12 +109,12 @@ export default function CoachChat() {
         {chat.isPending && <Typing />}
 
         {messages.length === 0 && !chat.isPending && (
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="grid gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-1">
             {SUGGESTIONS.map((s) => (
               <button
                 key={s}
                 onClick={() => send(s)}
-                className="rounded-full border border-hair bg-white/[0.03] px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-accent/50 hover:text-white"
+                className="min-h-11 rounded-xl bg-card2 px-3.5 py-2.5 text-left text-sm text-neutral-300 transition-colors hover:bg-white/[0.09] hover:text-white"
               >
                 {s}
               </button>
@@ -127,12 +128,12 @@ export default function CoachChat() {
           e.preventDefault();
           send(input);
         }}
-        className="mt-3 flex items-end gap-2"
+        className="mt-3 flex flex-wrap items-end gap-2 border-t border-hair pt-3"
       >
         {editingIdx !== null && (
-          <span className="flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-1 text-xs text-accent">
+          <span className="flex w-full items-center gap-1 rounded-lg bg-accent/10 px-2 py-1 text-xs text-accent">
             <Pencil size={11} /> düzenleniyor
-            <button type="button" onClick={cancelEdit} className="ml-1 hover:text-white">
+            <button type="button" onClick={cancelEdit} className="ml-auto flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent/10">
               <X size={12} />
             </button>
           </span>
@@ -151,12 +152,12 @@ export default function CoachChat() {
           }}
           rows={1}
           placeholder={editingIdx !== null ? "Mesajı düzelt..." : "Nasıl hissediyorsun?"}
-          className="max-h-28 flex-1 resize-none rounded-xl border border-hair bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
+          className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:bg-panel"
         />
         <button
           type="submit"
           disabled={!input.trim() || chat.isPending}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-grad text-accentink shadow-glow transition-all hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white transition-[filter,transform] hover:brightness-110 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={editingIdx !== null ? "Düzelt ve gönder" : "Gönder"}
         >
           {editingIdx !== null ? <Pencil size={18} /> : <Send size={18} />}
@@ -187,26 +188,26 @@ function Bubble({
     <div className={`flex group/bubble ${isUser ? "justify-end" : "justify-start"}`}>
       <div className="relative max-w-[88%]">
         <div
-          className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+          className={`whitespace-pre-wrap rounded-[var(--radius-card)] px-3.5 py-2.5 text-sm leading-relaxed ${
             isEditing
               ? "ring-2 ring-accent"
               : isUser
-                ? "bg-accent-grad text-accentink"
-                : "border border-hair bg-white/[0.05] text-neutral-100"
+                ? "bg-accent text-white"
+                : "bg-card2 text-neutral-100"
           }`}
         >
           {content}
         </div>
         {canEdit && (
           <div
-            className={`absolute -top-2 flex gap-0.5 opacity-0 group-hover/bubble:opacity-100 transition-opacity ${
+            className={`absolute -top-4 flex gap-1 opacity-0 transition-opacity group-focus-within/bubble:opacity-100 group-hover/bubble:opacity-100 ${
               isUser ? "-left-2 flex-row-reverse" : "-right-2"
             }`}
           >
             {onEdit && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(index); }}
-                className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-700 text-neutral-300 hover:bg-white hover:text-neutral-800 transition-colors"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-hair bg-panel text-neutral-400 transition-colors hover:text-neutral-100"
                 title="Düzenle"
               >
                 <Pencil size={10} />
@@ -214,7 +215,7 @@ function Bubble({
             )}
             <button
               onClick={(e) => { e.stopPropagation(); onDelete!(index); }}
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-700 text-neutral-300 hover:bg-red-500 hover:text-white transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-hair bg-panel text-neutral-400 transition-colors hover:bg-gain/10 hover:text-gain"
               title={isUser ? "Mesajı ve yanıtı sil" : "Sil"}
             >
               <Trash2 size={10} />
@@ -229,11 +230,11 @@ function Bubble({
 function Typing() {
   return (
     <div className="flex justify-start">
-      <div className="flex gap-1 rounded-2xl border border-hair bg-white/[0.05] px-4 py-3">
+      <div className="flex gap-1 rounded-[var(--radius-card)] border border-hair bg-card2 px-4 py-3">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent"
+            className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
             style={{ animationDelay: `${i * 0.15}s` }}
           />
         ))}
