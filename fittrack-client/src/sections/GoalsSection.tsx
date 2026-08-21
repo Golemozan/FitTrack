@@ -53,7 +53,7 @@ export default function GoalsSection() {
       <SectionHeader icon={Target} title="Hedefler & Profil" />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <div className="mb-3 eyebrow text-[13px] text-neutral-400">Günlük Makro Hedefleri</div>
+          <h3 className="mb-3 text-sm font-semibold text-neutral-300">Günlük makro hedefleri</h3>
           {goals.isLoading ? (
             <ListSkeleton rows={2} />
           ) : (
@@ -118,7 +118,7 @@ function ProfileCard() {
 
   return (
     <Card>
-      <div className="mb-3 eyebrow text-[13px] text-neutral-400">Profil</div>
+      <h3 className="mb-3 text-sm font-semibold text-neutral-300">Profil</h3>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3">
         <Input label="Boy (cm)" type="number" value={height} onChange={(e) => setHeight(e.target.value)} />
         <Input label="Hedef Kilo (kg)" type="number" step="0.1" value={target} onChange={(e) => setTarget(e.target.value)} />
@@ -130,11 +130,11 @@ function ProfileCard() {
       {(bmi != null || toTarget != null) && (
         <div className="mt-4 grid grid-cols-2 gap-3 border-t border-hair pt-4">
           <div>
-            <div className="eyebrow text-[11px] text-neutral-400">BMI</div>
+            <div className="text-xs font-medium text-neutral-400">BMI</div>
             <div className="num text-2xl text-neutral-100">{bmi != null ? bmi.toFixed(1) : "—"}</div>
           </div>
           <div>
-            <div className="eyebrow text-[11px] text-neutral-400">Hedefe kalan</div>
+            <div className="text-xs font-medium text-neutral-400">Hedefe kalan</div>
             <div className={`num text-2xl ${toTarget != null && toTarget > 0 ? "text-accent" : "text-loss"}`}>
               {toTarget != null ? `${toTarget > 0 ? "" : "+"}${Math.abs(toTarget).toFixed(1)}` : "—"}
               {toTarget != null && <span className="ml-1 text-sm text-neutral-400">kg</span>}

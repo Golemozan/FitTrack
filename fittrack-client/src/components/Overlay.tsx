@@ -38,19 +38,19 @@ export default function Overlay({ open, onClose, children }: { open: boolean; on
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto sm:items-center sm:p-4">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+    <div className="fixed inset-0 z-[var(--z-overlay)] flex items-end justify-center overflow-y-auto sm:items-center sm:p-5">
+      <div className="fixed inset-0 bg-ink/85" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className="relative z-10 max-h-[94dvh] w-full overflow-y-auto rounded-t-[24px] border border-white/[0.07] bg-panel px-4 pb-5 pt-7 shadow-[var(--shadow-overlay)] outline-none sm:max-w-5xl sm:rounded-[24px] sm:p-7"
+        className="relative z-10 max-h-[94dvh] w-full overflow-y-auto rounded-t-[var(--radius-panel)] border border-hair bg-panel px-4 pb-5 pt-7 shadow-[var(--shadow-overlay)] outline-none sm:max-w-6xl sm:rounded-[var(--radius-panel)] sm:p-7 lg:p-8"
       >
-        <div className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20 sm:hidden" aria-hidden="true" />
+        <div className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-hair sm:hidden" aria-hidden="true" />
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-card2 text-neutral-400 transition-colors hover:text-white sm:right-5 sm:top-5"
+          className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-hair/70 bg-card2 text-neutral-400 transition-[background-color,color] duration-150 hover:bg-panel hover:text-neutral-100 sm:right-5 sm:top-5"
           aria-label="Kapat"
         >
           <X size={20} />

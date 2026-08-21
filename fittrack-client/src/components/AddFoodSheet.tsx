@@ -142,12 +142,12 @@ export default function AddFoodSheet({
     <div className="fixed inset-0 z-[60]">
       <div
         onClick={close}
-        className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-ink/85 transition-opacity duration-300 ${
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-[24px] border-t border-white/[0.07] bg-panel p-5 shadow-2xl shadow-black/50 transition-transform duration-300 ${
+        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] max-w-md overflow-y-auto rounded-t-[var(--radius-panel)] border border-hair bg-panel p-5 shadow-[var(--shadow-overlay)] transition-transform duration-300 ${
           shown ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -197,7 +197,7 @@ function Step1({
           value={rawQuery}
           onChange={(e) => setRawQuery(e.target.value)}
           placeholder="200g tavuk göğsü"
-          className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/25 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35"
+          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel"
         />
       </div>
 
@@ -290,7 +290,7 @@ function Step2({
           inputMode="numeric"
           value={grams}
           onChange={(e) => setGrams(Math.max(0, Number(e.target.value) || 0))}
-          className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/25 px-3 text-sm tabular-nums text-neutral-100 outline-none transition-colors focus:border-accent/50 focus:bg-black/35"
+          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 px-3 text-sm tabular-nums text-neutral-100 outline-none transition-colors focus:border-accent/70 focus:bg-panel"
         />
       </label>
 
@@ -302,7 +302,7 @@ function Step2({
         ))}
       </div>
 
-      <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/[0.06] bg-black/20 p-3.5 text-center">
+      <div className="grid grid-cols-4 gap-2 rounded-2xl border border-hair/60 bg-card2 p-3.5 text-center">
         <Preview label="kcal" value={preview.calories} className="text-neutral-100" />
         <Preview label="Protein" value={`${preview.protein}g`} className="text-pro/90" />
         <Preview label="Karb" value={`${preview.carbs}g`} className="text-carb/90" />
@@ -312,7 +312,7 @@ function Step2({
       <button
         onClick={onSubmit}
         disabled={pending || grams <= 0}
-        className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-white transition-[filter,transform] hover:brightness-110 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-40"
+        className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-white press hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitLabel}
       </button>

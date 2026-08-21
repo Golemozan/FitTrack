@@ -79,16 +79,16 @@ export default function AddExerciseSheet({
     <div className="fixed inset-0 z-[60]">
       <div
         onClick={close}
-        className={`absolute inset-0 bg-ink/70 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-ink/85 transition-opacity duration-300 ${
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto flex max-h-[80vh] max-w-md flex-col rounded-t-3xl border-t border-white/[0.07] bg-panel shadow-2xl shadow-black/50 transition-transform duration-300 ${
+        className={`absolute inset-x-0 bottom-0 mx-auto flex max-h-[80vh] max-w-md flex-col rounded-t-[var(--radius-panel)] border border-hair bg-panel shadow-[var(--shadow-overlay)] transition-transform duration-300 ${
           shown ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="shrink-0 border-b border-white/[0.06] px-5 pb-4 pt-5">
+        <div className="shrink-0 border-b border-hair/70 px-5 pb-4 pt-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-neutral-100">Egzersiz ekle</h2>
             <IconButton icon={X} size={19} onClick={close} aria-label="Kapat" />
@@ -100,7 +100,7 @@ export default function AddExerciseSheet({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Hareket ara — örn. chest press"
-              className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/25 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35"
+              className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel"
             />
           </div>
 

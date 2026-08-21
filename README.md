@@ -214,3 +214,158 @@ curl -i https://xxx.up.railway.app/api/goals
 > hâlâ mevcut ama frontend tarafından kullanılmıyor.
 
 Varsayılan seed hedefler: **2500 kcal / 180g protein / 250g karb / 70g yağ**.
+
+---
+
+## GOTCHAS
+
+### `dev.ps1` backend'i Production ortamında başlatıyordu — tüm `/api` 503, CORS reddi (2026-08-20, .NET 8 / ASP.NET Core 8)
+
+**Semptom:** `dev.ps1` sorunsuz tamamlanıyor, iki pencere açılıyor, 5000 ve 5173 portları
+dinlemede. Ama arayüz "bağlanılamıyor" diyor. Backend log'unda:
+
+```
+fail: FitTrack.API.Middleware.ApiKeyMiddleware[0]
+      FITTRACK_API_KEY yok - API tamamen kapalı.
+info: ...CorsService[6] Request origin http://localhost:5173 does not have permission
+GET /api/goals - 503
+Hosting environment: Production
+Content root path: C:\Users\ozane\Documents\OzanOS   <-- dev.ps1'in çağrıldığı dizin
+```
+
+**Neden:** `dotnet publish -c Debug` **ortamı** Development yapmaz — `-c Debug` sadece
+derleme yapılandırmasıdır. `ASPNETCORE_ENVIRONMENT` ayarlı değilse ASP.NET Core
+**Production**'a düşer. Production'da iki koruma birden kapıyı kapatır:
+
+- `ApiKeyMiddleware`: anahtar yoksa yerelde geçirir, **Production'da 503'ler** (yanlışlıkla
+  korumasız yayına çıkmayı imkânsız kılmak için bilinçli tasarım).
+- `Program.cs` CORS: `ALLOWED_ORIGINS` boşsa "her origin"e izin yalnızca
+  `IsDevelopment()` dalında verilir; Production'da hiçbir origin geçmez.
+
+Ayrıca `Start-Process` çalışma dizinini miras aldığı için content root, `dev.ps1`'in
+çağrıldığı klasör oluyordu — `appsettings.json` yanlış yerde aranıyor. (DB etkilenmiyor;
+o `AppContext.BaseDirectory` üzerinden çözülüyor.)
+
+**Çözüm:** `dev.ps1` içindeki backend `Start-Process` çağrısına iki şey eklendi:
+
+```powershell
+Start-Process powershell -WorkingDirectory $publishDir -ArgumentList @(
+    "-NoExit", "-Command",
+    "`$env:ASPNETCORE_ENVIRONMENT='Development'; ... & '$publishDir\FitTrack.API.exe'"
+)
+```
+
+**Doğrulama:** `GET http://127.0.0.1:5000/api/goals` (`Origin: http://localhost:5173`
+başlığıyla) → `200` + `Access-Control-Allow-Origin: http://localhost:5173`.
+
+**Aynı kökten üçüncü semptom — ölü AI koç:** `Anthropic:ApiKey` ve `Telegram:BotToken`
+bu makinede **.NET User Secrets**'ta duruyor (`UserSecretsId` = `03d3557b-...`, dosya
+`%APPDATA%\Microsoft\UserSecrets\<id>\secrets.json`). User Secrets sağlayıcısı config
+zincirine **yalnızca Development'ta** eklenir. Production'a düşünce `secrets.json` hiç
+okunmadı → `CoachService.ApiKey` boş → `ChatAsync` sessizce boş cevap döndürdü
+(exception yok, log yok — teşhisi zorlaştıran kısım bu).
+
+Anahtarı ortam değişkenine taşımaya **gerek yok**; ortam Development olduğu sürece
+secrets okunur. Doğrulama:
+
+```powershell
+Invoke-WebRequest -Uri http://127.0.0.1:5000/api/coach/chat -Method POST `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body '{"messages":[{"role":"user","content":"test"}]}'
+# -> 200 {"reply":"...","actions":[]}
+```
+
+Not: gövde alanı `messages` (dizi), `message` değil — yanlışı `400 {"error":"Boş mesaj."}` döner.
+
+### Siyah ekran: `Ok(null)` → 204 → axios `data: ""` → `<WorkoutCard>` çöküyor (2026-08-20, ASP.NET Core 8 / axios 1.x)
+
+**Semptom:** `localhost:5173` açılıyor, sunucu `200` dönüyor, index.html geliyor —
+ama sayfa **tamamen siyah**. Boş sayfa değil: `<html class="dark">` uygulanmış, `#root`
+boş. Konsolda:
+
+```
+Uncaught TypeError: Cannot read properties of undefined (reading 'reduce')
+  source: /src/App.tsx
+  An error occurred in the <WorkoutCard> component.
+```
+
+**Neden — üç parça üst üste:**
+
+1. ASP.NET Core'da `return Ok(session)` — `session` null ise **204 No Content**, gövdesiz.
+   (`WorkoutController.GetToday`, `WeightController` `today` ucu da aynı.)
+2. axios gövdesiz cevabı `response.data = ""` yapar — `null` değil, **boş string**.
+   Client'ta tip `WorkoutSession | null` yazıyor olsa bile runtime değeri `""`.
+3. `current?.exercises.reduce(...)` — optional chain **boş stringde tökezlemez**
+   (`""` null/undefined değil), `"".exercises` → `undefined`, `.reduce` → TypeError.
+
+Ve React'te error boundary olmadığı için tek bileşenin hatası **tüm ağacı** söküyor —
+"kart boş görünür" yerine "her şey siyah".
+
+**En sinsi tarafı:** hata yalnızca **o gün henüz antrenman kaydı yokken** çıkıyor.
+Bir set girildiği anda uc 200 + JSON dönüyor ve uygulama düzeliyor — yani sabah
+açınca bozuk, akşam açınca sağlam. Varsayılan durum test edilmezse görülmez.
+
+**Çözüm:** `src/api/axios.ts` içinde tek bir response interceptor — sözleşme
+`T | null` diyorsa runtime da null vermeli:
+
+```ts
+api.interceptors.response.use((response) => {
+  if (response.status === 204 || response.data === "") response.data = null;
+  return response;
+});
+```
+
+Ayrıca `App.tsx` `WorkoutCard` içinde `current?.exercises?.reduce(...)` (ikinci `?.`).
+
+**Doğrulama:** headless chromium ile render + konsol yakalama — `Uncaught` satırı yok,
+`#root` dolu, kartlar veriyle geliyor:
+
+```bash
+"$LOCALAPPDATA/ms-playwright/chromium-1234/chrome-win64/chrome.exe" \
+  --headless=new --disable-gpu --virtual-time-budget=9000 --enable-logging=stderr \
+  --screenshot=out.png --dump-dom http://localhost:5173/ > dom.html 2> console.txt
+```
+
+**Kapatıldı (aynı gün):** `src/components/ErrorBoundary.tsx` eklendi — altı özet kartı,
+altı bölüm overlay’i ve kökteki `AuthGate` ayrı ayrı sarıldı. Bir kart çökerse yalnızca
+o kart “‹ad› açılamadı” + “Tekrar dene” fallback’ine dönüyor, geri kalan ekran çalışıyor.
+
+Ayrıca iki uç (`WorkoutController.GetToday`, `WeightController.Today`) `new JsonResult(...)`
+ile artık 204 yerine **200 + `null`** dönüyor — sözleşme client interceptor’ına bağımlı
+olmaktan çıktı. `Ok(x)` deseni null dönebilen başka uçta kalmadı (tarandı).
+
+Sınırın çalıştığı kasten hata fırlatılarak doğrulandı: tek `role="alert"`, diğer kartlar sağlam.
+
+### `--headless=new` `--window-size`’ı viewport’a uygulamaz — mobil testi sessizce yalan söyler (2026-08-20, Chromium 1234)
+
+**Semptom:** Arayüz 375px’te ekran dışına taşıyor göründü: kartlar sağdan kesik,
+alttaki 5 sekmeden 4’ü sığmış, `sm:` breakpoint’i mobilde aktif gibi davranıyordu.
+Gerçekte layout’ta hiçbir sorun yoktu.
+
+**Neden:** `chrome.exe --headless=new` `--window-size` bayrağını **CSS viewport’una
+uygulamıyor** — kendi varsayılan genişliğinde render edip ekran görüntüsünü istenen
+boyuta kırpıyor. Ölçüldü:
+
+```bash
+# probe.html:  <b id="o"></b><script>o.textContent='VIEWPORT='+innerWidth</script>
+chrome.exe --headless=new  --window-size=375,800 --dump-dom probe.html   # VIEWPORT=504  ✗
+chrome-headless-shell.exe  --window-size=375,800 --dump-dom probe.html   # VIEWPORT=375  ✓
+```
+
+504px ≥ 640px değil ama kartların hesaplandığı genişlik istenen 375 değildi; görüntü
+375’e kırpılınca sağ taraf kesik geçti ve “layout bozuk” gibi okundu.
+
+**Çözüm:** duyarlılık testinde **`chrome-headless-shell.exe`** kullan, `--headless=new`
+değil. Masaüstü tek genişlik renderı için ikisi de olur; genişliğin kendisi ölçülen
+şeyse shell şart.
+
+```bash
+SHELL_BIN="$LOCALAPPDATA/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-win64/chrome-headless-shell.exe"
+for W in 320 375 414 768; do
+  "$SHELL_BIN" --disable-gpu --hide-scrollbars --virtual-time-budget=8000 \
+    --window-size=$W,900 --screenshot=w$W.png http://localhost:5173/
+done
+```
+
+**Ders:** ölçen aracın kendisi doğrulanmadan bulgusuna güvenilmez. Burada araç hata
+vermedi, sessizce yanlış genişlikte ölçtü — var olmayan bir hatayı kovalattı.

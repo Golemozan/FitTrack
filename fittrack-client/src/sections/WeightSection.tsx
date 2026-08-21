@@ -152,12 +152,6 @@ export default function WeightSection() {
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="weightFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={grid} />
                   {avg != null && (
                     <ReferenceLine
@@ -184,9 +178,9 @@ export default function WeightSection() {
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "var(--color-ink)",
-                      color: "var(--color-paper-2)",
-                      border: "var(--rule-hair) solid var(--color-rule-2)",
+                      background: "var(--color-surface-raised)",
+                      color: "var(--color-ink)",
+                      border: "1px solid var(--color-border-strong)",
                       borderRadius: "var(--radius-input)",
                       fontSize: 12,
                     }}
@@ -197,7 +191,8 @@ export default function WeightSection() {
                     name="Kilo (kg)"
                     stroke="var(--color-accent)"
                     strokeWidth={2.5}
-                    fill="url(#weightFill)"
+                    fill="var(--color-accent-soft)"
+                    fillOpacity={0.55}
                     dot={{ r: 2.5, fill: "var(--color-accent)" }}
                     activeDot={{ r: 5 }}
                   />

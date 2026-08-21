@@ -1,6 +1,6 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · macrostructure: Daily Summary · tone: quiet iOS-native · anchor hue: system-blue · contrast: pass */
+/* Hallmark · genre: modern-minimal · macrostructure: Performance Dashboard · theme: technical-athletic dark · enrichment: tier A · nav: app rail · footer: none */
 :root {
-  --paper-channels: 11% 0.004 260;
+  --paper-channels: 13% 0.008 264;
   --paper-2-channels: 18% 0.006 260;
   --paper-3-channels: 23% 0.007 260;
   --ink-channels: 97% 0.003 260;
@@ -18,6 +18,14 @@
   --protein-channels: 72% 0.15 145;
   --carb-channels: 72% 0.14 72;
   --fat-channels: 72% 0.14 315;
+
+  /* Alan aksanlari — Apple Fitness registeri. Her aksan KENDI yuzeyine sahiptir:
+     move = kalori/hareket, lift = antrenman, flow = kilo/ilerleme, lav = check-in.
+     Aksanlar birbirine gradyanla baglanmaz; kart zemini hep panel kalir. */
+  --move-channels: 68% 0.20 18;
+  --lift-channels: 82% 0.19 130;
+  --flow-channels: 80% 0.14 200;
+  --lav-channels: 74% 0.14 300;
 
   --color-paper: oklch(var(--paper-channels));
   --color-paper-2: oklch(var(--paper-2-channels));
@@ -37,19 +45,44 @@
   --color-protein: oklch(var(--protein-channels));
   --color-carb: oklch(var(--carb-channels));
   --color-fat: oklch(var(--fat-channels));
+  --color-move: oklch(var(--move-channels));
+  --color-lift: oklch(var(--lift-channels));
+  --color-flow: oklch(var(--flow-channels));
+  --color-lav: oklch(var(--lav-channels));
+  --color-track: oklch(23% 0.010 264);
+
+  /* Semantic surfaces. Elevation on dark comes from lightness, never glow. */
+  --color-surface-base: var(--color-paper);
+  --color-surface-panel: var(--color-paper-2);
+  --color-surface-raised: var(--color-paper-3);
+  --color-border-subtle: oklch(var(--rule-channels) / 0.54);
+  --color-border-strong: oklch(var(--rule-2-channels) / 0.72);
 
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --font-outlier: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 
   --radius-input: 0.75rem;
-  --radius-card: 1.25rem;
+  --radius-card: 1.125rem;
   --radius-panel: 1.5rem;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 0 oklch(100% 0 0 / 0.03), 0 12px 30px oklch(0% 0 0 / 0.16);
+  --shadow-card: 0 1px 0 oklch(100% 0 0 / 0.025);
   --shadow-overlay: 0 24px 80px oklch(0% 0 0 / 0.6);
 
+  --space-page-x: clamp(1rem, 2.8vw, 2.5rem);
+  --space-page-y: clamp(1.5rem, 3vw, 3rem);
+  --space-panel: clamp(1.125rem, 2vw, 1.75rem);
+  --content-max: 90rem;
+  --rail-width: 15rem;
+
+  --z-nav: 40;
+  --z-overlay: 50;
+
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-micro: 100ms;
+  --ease-press: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-micro: 70ms;
   --dur-short: 180ms;
+  --dur-press: 140ms;
+  --dur-ring: 700ms;
+  --dur-pop: 240ms;
 }

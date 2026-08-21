@@ -116,7 +116,7 @@ export default function CheckInSection() {
 
         {/* TODAY LIST */}
         <Card>
-          <div className="mb-3 eyebrow text-[13px] text-neutral-400">Bugünkü check-in'ler</div>
+          <h3 className="mb-3 text-sm font-semibold text-neutral-300">Bugünkü check-in'ler</h3>
           {today.isLoading ? (
             <p className="text-sm text-neutral-500">Yükleniyor…</p>
           ) : (today.data?.length ?? 0) === 0 ? (
@@ -141,7 +141,7 @@ export default function CheckInSection() {
                   </div>
                   <button
                     onClick={() => deleteCheckin.mutate(c.id)}
-                    className="shrink-0 text-neutral-500 opacity-0 transition-opacity hover:text-gain group-hover:opacity-100"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition-[background-color,color] duration-150 hover:bg-gain/10 hover:text-gain"
                     aria-label="Sil"
                   >
                     <Trash2 size={15} />

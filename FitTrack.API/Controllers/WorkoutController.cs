@@ -37,7 +37,10 @@ public class WorkoutController : ControllerBase
             .Where(w => w.LoggedAt >= day && w.LoggedAt < day.AddDays(1))
             .OrderByDescending(w => w.LoggedAt)
             .FirstOrDefaultAsync();
-        return Ok(session);
+        // `Ok(null)` gövdesiz 204 döner; axios bunu `data: ""` yapar ve client'ta
+        // `T | null` sözleşmesi bozulur (bkz. README GOTCHAS, 2026-08-20 siyah ekran).
+        // JsonResult açıkça 200 + `null` gövdesi yazar.
+        return new JsonResult(session);
     }
 
     // 2b. PUT /api/workout/session/{id}  → rename a session
