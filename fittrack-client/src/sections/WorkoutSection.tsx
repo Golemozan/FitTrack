@@ -99,7 +99,7 @@ export default function WorkoutSection() {
                 Tamamladığın seanslar burada birikir.
               </EmptyState>
             ) : (
-              <ul className="divide-y divide-white/[0.06]">
+              <ul className="divide-y divide-hair/60">
                 {recent.data?.map((s) => (
                   <li key={s.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
@@ -186,7 +186,7 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveName()}
               autoFocus
-              className="h-9 min-w-0 flex-1 rounded-xl border border-white/[0.07] bg-black/25 px-3 text-sm font-semibold text-neutral-100 outline-none transition-colors focus:border-accent/50"
+              className="h-10 min-w-0 flex-1 rounded-xl border border-hair/70 bg-card2 px-3 text-sm font-semibold text-neutral-100 outline-none transition-colors focus:border-accent/70"
             />
             <IconButton icon={Check} tone="accent" size={15} onClick={saveName} aria-label="Kaydet" />
             <IconButton
@@ -225,7 +225,7 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-10 z-20 w-36 overflow-hidden rounded-xl border border-white/[0.07] bg-card2 shadow-xl shadow-black/40">
+                  <div className="absolute right-0 top-10 z-20 w-36 overflow-hidden rounded-xl border border-hair bg-card2 shadow-[var(--shadow-overlay)]">
                     <button
                       onClick={() => {
                         setMenuOpen(false);
@@ -292,7 +292,7 @@ function SetRow({ set, ghost }: { set: ExerciseSet; ghost?: ExerciseSet }) {
   // Height, not vertical padding — keeps the field exactly as tall as the 36px
   // buttons beside it so the row reads as one aligned band.
   const inputCls =
-    "h-10 w-full rounded-xl border border-white/[0.07] bg-black/25 text-center text-sm tabular-nums text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/50 focus:bg-black/35";
+    "h-10 w-full rounded-xl border border-hair/70 bg-card2 text-center text-sm tabular-nums text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel";
 
   return (
     <div className={`${SET_GRID} ${set.isCompleted ? "opacity-70" : ""}`}>

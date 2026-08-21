@@ -63,7 +63,7 @@ export default function NutritionSection() {
 
   const macroRows = [
     { label: "Protein", value: totals.protein, goal: g?.proteinGoal ?? 0, color: "bg-pro" },
-    { label: "Karb", value: totals.carbs, goal: g?.carbGoal ?? 0, color: "bg-carb" },
+    { label: "Carb", value: totals.carbs, goal: g?.carbGoal ?? 0, color: "bg-carb" },
     { label: "Yağ", value: totals.fat, goal: g?.fatGoal ?? 0, color: "bg-fat" },
   ];
 
@@ -95,21 +95,23 @@ export default function NutritionSection() {
 
   return (
     <section id="beslenme" className="scroll-mt-24">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-5">
         <SectionHeader
           icon={UtensilsCrossed}
           title="Beslenme"
-          className=""
+          className="mb-3"
           action={tab === "today" ? { label: "Yemek Ekle", onClick: () => openSheet("Breakfast") } : undefined}
         />
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "today", label: "Bugün" },
-            { value: "history", label: "Geçmiş", icon: History },
-          ]}
-        />
+        <div className="flex justify-end">
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "today", label: "Bugün" },
+              { value: "history", label: "Geçmiş", icon: History },
+            ]}
+          />
+        </div>
       </div>
 
       {tab === "today" ? (

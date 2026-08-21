@@ -28,6 +28,11 @@ export default {
         pro: "oklch(var(--protein-channels) / <alpha-value>)",
         carb: "oklch(var(--carb-channels) / <alpha-value>)",
         fat: "oklch(var(--fat-channels) / <alpha-value>)",
+        move: "oklch(var(--move-channels) / <alpha-value>)",
+        lift: "oklch(var(--lift-channels) / <alpha-value>)",
+        flow: "oklch(var(--flow-channels) / <alpha-value>)",
+        lav: "oklch(var(--lav-channels) / <alpha-value>)",
+        track: "oklch(23% 0.010 264 / <alpha-value>)",
         loss: "oklch(var(--success-channels) / <alpha-value>)",
         gain: "oklch(var(--danger-channels) / <alpha-value>)",
         neutral: {

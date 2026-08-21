@@ -53,7 +53,8 @@ public class WeightController : ControllerBase
             .Where(w => w.LoggedAt >= day && w.LoggedAt < day.AddDays(1))
             .OrderByDescending(w => w.LoggedAt)
             .FirstOrDefaultAsync();
-        return Ok(log);
+        // Kayit yoksa 204 degil, acikca 200 + `null` (bkz. WorkoutController.GetToday).
+        return new JsonResult(log);
     }
 
     // 3. GET /api/weight/history?days=30  → ascending points

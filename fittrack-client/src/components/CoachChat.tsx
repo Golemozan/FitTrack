@@ -157,7 +157,7 @@ export default function CoachChat() {
         <button
           type="submit"
           disabled={!input.trim() || chat.isPending}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white transition-[filter,transform] hover:brightness-110 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white press hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={editingIdx !== null ? "Düzelt ve gönder" : "Gönder"}
         >
           {editingIdx !== null ? <Pencil size={18} /> : <Send size={18} />}

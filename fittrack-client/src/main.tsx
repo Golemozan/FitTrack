@@ -5,6 +5,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import ToastContainer from "./components/Toast";
 import AuthGate from "./components/AuthGate";
+import ErrorBoundary from "./components/ErrorBoundary";
 import App from "./App";
 import "./index.css";
 
@@ -28,9 +29,13 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastProvider>
-          <AuthGate>
-            <App />
-          </AuthGate>
+          {/* Son çare: kart sınırlarının yakalayamadığı bir hata (provider, AuthGate,
+              kabuk) yine de siyah ekran yerine okunabilir bir kart göstersin. */}
+          <ErrorBoundary label="FitTrack" className="m-4">
+            <AuthGate>
+              <App />
+            </AuthGate>
+          </ErrorBoundary>
           <ToastContainer />
         </ToastProvider>
       </ThemeProvider>

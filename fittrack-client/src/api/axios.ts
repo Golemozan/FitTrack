@@ -17,6 +17,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// 204 No Content → `null`. ASP.NET Core'da `Ok(null)` gövdesiz 204 döner; axios bunu
+// `data: ""` yapar. Boş string null olmadığı için `current?.exercises` gibi optional
+// chain'ler tökezlemez, `"".exercises` undefined olur ve bir sonraki erişim patlar.
+// Sözleşme `T | null` diyorsa runtime da null vermeli — tek yerden normalize ediyoruz.
+api.interceptors.response.use((response) => {
+  if (response.status === 204 || response.data === "") response.data = null;
+  return response;
+});
+
 // Parola reddedildiyse sakladığımızı at ve kilit ekranını çağır.
 api.interceptors.response.use(
   (response) => response,

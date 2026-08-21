@@ -1,4 +1,11 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · macrostructure: Daily Summary · design-system: design.md · theme: dark iOS-inspired · contrast: pass · mobile: pass */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5
+ * route: custom (tuned) · genre: modern-minimal · macrostructure: Performance Dashboard
+ * design-system: design.md · vibe: "technical-athletic daily instrument"
+ * paper: oklch(13% 0.008 264) · accents: move oklch(68% 0.20 18) / lift oklch(82% 0.19 130) / flow oklch(80% 0.14 200)
+ * display: SF Pro (system) · body: SF Pro (system)
+ * axes: dark / system-sans / multi · motion: ring-draw · press · pop
+ * contrast: pass · mobile: pass · studied: no
+ */
 @import "../../tokens.css";
 
 @tailwind base;
@@ -19,7 +26,7 @@ body {
 h1, h2, h3 { min-width: 0; overflow-wrap: anywhere; font-family: var(--font-display); letter-spacing: -0.025em; }
 .tnum, .num { font-variant-numeric: tabular-nums; }
 .num { font-family: var(--font-display); letter-spacing: -0.045em; font-weight: 650; line-height: 1; }
-.eyebrow { font-size: .75rem; font-weight: 600; letter-spacing: .01em; }
+.eyebrow { font-size: .75rem; font-weight: 650; letter-spacing: .005em; }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -33,4 +40,69 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 ::selection { background: var(--color-accent-soft); color: var(--color-ink); }
 @media (pointer: coarse) { button, [role="button"] { min-height: 44px; } }
+
+.app-surface {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-panel);
+}
+.app-surface-raised {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+}
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+@media (min-width: 768px) {
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .dashboard-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1.125rem; }
+}
+
+/* --- Motion: uc primitif, fazlasi yok ---------------------------------------
+   1. ring-draw : halkalar acilista dolar (stroke-dashoffset)
+   2. press     : hover'da 2px kalkar, basilinca 1px coker  (scale YOK, spring YOK)
+   3. pop       : YALNIZ kutlama ani -- hedef tutunca / seri artinca, sayfa basina bir kez
+   Hepsi transform/opacity uzerinde calisir; layout ozelligi animate edilmez.
+   `transition-all` kullanilmaz -- her ozellik tek tek yazilir.                 */
+
+@keyframes ring-draw {
+  from { stroke-dashoffset: var(--ring-empty); }
+  to   { stroke-dashoffset: var(--ring-fill); }
+}
+@keyframes pop {
+  0%, 100% { transform: scale(1); }
+  45%      { transform: scale(1.06); }
+}
+
+.press {
+  transition:
+    transform var(--dur-press) var(--ease-press),
+    background-color var(--dur-press) var(--ease-press),
+    border-color var(--dur-press) var(--ease-press),
+    filter var(--dur-press) var(--ease-press);
+}
+@media (hover: hover) {
+  .press:hover { transform: translateY(-2px); }
+}
+.press:active {
+  transform: translateY(1px);
+  transition-duration: var(--dur-micro);
+}
+
+.ring-arc {
+  animation: ring-draw var(--dur-ring) var(--ease-out) both;
+  transition: stroke-dashoffset var(--dur-ring) var(--ease-out);
+}
+.pop-once { animation: pop var(--dur-pop) var(--ease-out) 1; }
+
+/* Azaltilmis hareket: mekansal hareket tamamen duser, halkalar dolu baslar. */
+@media (prefers-reduced-motion: reduce) {
+  .ring-arc { animation: none; stroke-dashoffset: var(--ring-fill); transition: none; }
+  .pop-once { animation: none; }
+  .press:hover, .press:active { transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; } }

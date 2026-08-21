@@ -12,19 +12,19 @@ import type { LucideIcon } from "lucide-react";
    FitTrack is permanently dark (see ThemeContext) — no `dark:`
    variants anywhere below. Three rules hold the screens together:
 
-   1. Radius scale: 0–4px; circles only when the data itself is circular.
-   2. One hairline, one field look. Nothing redefines them locally.
+   1. Radius is semantic: input < card < panel; circles only for circular data.
+   2. One tokenized hairline, one field look. Nothing redefines them locally.
    3. The accent is a *soft* fill (accent/12–20) everywhere except
       the single primary action on a screen. Saturated fills stop
       meaning "important" once everything wears one.
    ──────────────────────────────────────────────────────────────── */
 
 /** Hairline shared by every bordered surface. */
-export const HAIRLINE = "border-white/[0.07]";
+export const HAIRLINE = "border-hair/70";
 
 /** One definition of what a text/number field looks like. */
 export const fieldCls =
-  "min-h-11 w-full rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-[border-color,background-color] duration-150 placeholder:text-neutral-500 focus:border-accent focus:bg-panel disabled:cursor-not-allowed disabled:opacity-45";
+  "min-h-11 w-full rounded-[var(--radius-input)] border border-hair/70 bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-[border-color,background-color] duration-150 placeholder:text-neutral-500 focus:border-accent focus:bg-panel disabled:cursor-not-allowed disabled:opacity-45";
 
 // Retained for source compatibility: the palette is mono-accent, so every
 // chromatic name resolves to the same brand colour.
@@ -49,8 +49,8 @@ export function Card({
   padded?: boolean;
 }) {
   const surface = flat
-    ? "border-white/[0.06] bg-card2"
-    : "border-white/[0.06] bg-panel shadow-[var(--shadow-card)]";
+    ? "border-hair/60 bg-card2"
+    : "border-hair/70 bg-panel shadow-[var(--shadow-card)]";
   return (
     <div className={`rounded-[var(--radius-card)] border ${surface} ${padded ? "p-5" : ""} ${className}`}>{children}</div>
   );
@@ -58,7 +58,7 @@ export function Card({
 
 export function SectionTitle({ children, accent = "neutral" }: { children: ReactNode; accent?: Accent }) {
   return (
-    <h2 className={`eyebrow mb-3 text-[12px] ${accent === "neutral" ? "text-neutral-400" : "text-accent"}`}>
+    <h2 className={`mb-3 text-sm font-semibold ${accent === "neutral" ? "text-neutral-300" : "text-accent"}`}>
       {children}
     </h2>
   );
@@ -75,8 +75,8 @@ export function Button({ variant = "solid", className = "", ...props }: ButtonPr
   const base =
     "min-h-10 whitespace-nowrap rounded-[var(--radius-input)] px-4 py-2.5 text-sm font-semibold transition-[background-color,color,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
   const styles: Record<NonNullable<ButtonProps["variant"]>, string> = {
-    solid: "bg-accent text-white hover:brightness-110",
-    soft: "border border-white/[0.06] bg-card2 text-neutral-100 hover:bg-white/[0.09]",
+    solid: "bg-accent text-accentink hover:brightness-110",
+    soft: "border border-hair/70 bg-card2 text-neutral-100 hover:bg-panel",
     ghost: "text-neutral-300 hover:bg-card2",
   };
   return <button className={`${base} ${styles[variant]} ${className}`} {...props} />;
@@ -88,7 +88,7 @@ const iconTone: Record<IconTone, string> = {
   default: "border border-transparent text-neutral-400 hover:border-hair hover:bg-card2 hover:text-neutral-100",
   accent: "bg-accent/12 text-accent hover:bg-accent/20",
   danger: "text-neutral-500 hover:bg-gain/10 hover:text-gain",
-  active: "bg-accent text-white",
+  active: "bg-accent text-accentink",
 };
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -144,7 +144,7 @@ export function Segmented<T extends string | number>({
             type="button"
             onClick={() => onChange(o.value)}
             className={`flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors ${pad} ${
-              active ? "bg-neutral-600/60 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-100"
+              active ? "bg-panel text-neutral-100" : "text-neutral-400 hover:text-neutral-100"
             }`}
           >
             {Icon && <Icon size={14} />}
@@ -229,7 +229,7 @@ export function Stat({
 }) {
   return (
     <Card className="flex min-w-0 flex-col gap-1">
-      <span className="eyebrow text-[11px] text-neutral-400">{label}</span>
+      <span className="text-xs font-medium text-neutral-400">{label}</span>
       <span className={`num text-2xl ${accent === "neutral" ? "text-neutral-100" : "text-accent"}`}>{value}</span>
       {sub != null && <span className="text-xs text-neutral-400">{sub}</span>}
     </Card>
