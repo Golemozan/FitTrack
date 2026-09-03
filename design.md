@@ -84,7 +84,7 @@ dekoratif grafik, gereksiz rozet, `hover:scale-*`, kutlama toast'ı ve hover-onl
 
 ## Uygulama eşlemeleri
 
-- `tokens.css`: renk, yüzey, yarıçap, gölge, hareket ve z-index token'ları.
+- `fittrack-client/src/tokens.css`: renk, yüzey, yarıçap, gölge, hareket ve z-index token'ları.
 - `fittrack-client/src/index.css`: global tipografi, erişilebilirlik ve hareket primitifleri.
 - `fittrack-client/src/App.tsx`: Performance Dashboard macrostructure.
 - `fittrack-client/src/components/TodayRings.tsx`: C/P/F + kalori komuta alanı.
