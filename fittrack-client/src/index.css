@@ -6,7 +6,9 @@
  * axes: dark / system-sans / multi · motion: ring-draw · press · pop
  * contrast: pass · mobile: pass · studied: no
  */
-@import "../../tokens.css";
+/* Docker build baglami sadece fittrack-client/ klasorunu kopyaliyor; token
+ * dosyasi repo kokunde kalirsa konteynerde bulunamaz ve build kirilir. */
+@import "./tokens.css";
 
 @tailwind base;
 @tailwind components;
