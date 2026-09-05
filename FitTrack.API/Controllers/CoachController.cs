@@ -36,7 +36,7 @@ public class CoachController : ControllerBase
 
     // POST /api/coach/chat
     [HttpPost("chat")]
-    public async Task<ActionResult<CoachChatResponse>> Chat(CoachChatRequest req)
+    public async Task<ActionResult<CoachChatResponse>> Chat(CoachChatRequest req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_coach.ApiKey))
             return StatusCode(500, new { error = "Anthropic API anahtarı ayarlı değil (Anthropic:ApiKey)." });
@@ -55,14 +55,19 @@ public class CoachController : ControllerBase
             if (m.Role is not ("user" or "assistant") || string.IsNullOrWhiteSpace(m.Content)) continue;
             messages.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
         }
+        // Anthropic son turu assistant olan isteği reddediyor (prefill kaldırıldı).
+        // İstemci düzenlenmiş mesajdan sonrasını kırpıyor; bu da eski istemcilere karşı ağ.
+        while (messages.Count > 0 && (string?)messages[^1]?["role"] == "assistant")
+            messages.RemoveAt(messages.Count - 1);
+
         if (messages.Count == 0) return BadRequest(new { error = "Geçerli mesaj yok." });
 
-        var result = await _coach.ChatAsync(messages);
+        var result = await _coach.ChatAsync(messages, ct: ct);
         if (!result.Ok) return StatusCode(502, new { error = "Koç yanıt veremedi." });
 
         if (!string.IsNullOrWhiteSpace(result.Reply))
             _db.CoachMessages.Add(new CoachMessageRecord { Id = Guid.NewGuid(), Role = "assistant", Content = result.Reply, CreatedAt = DateTime.Now });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
 
         return Ok(new CoachChatResponse { Reply = result.Reply, Actions = result.Actions });
     }

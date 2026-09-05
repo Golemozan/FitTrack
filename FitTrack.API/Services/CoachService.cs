@@ -118,6 +118,7 @@ public class CoachService
             if (!resp.IsSuccessStatusCode) { _log.LogError("Anthropic {Status}: {Body}", (int)resp.StatusCode, body); return (false, body); }
             return (true, body);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; } // kullanıcı durdurdu
         catch (Exception ex) { _log.LogError(ex, "Anthropic call failed."); return (false, ""); }
     }
 
