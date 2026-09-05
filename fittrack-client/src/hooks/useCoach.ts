@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { checkinApi, coachApi, profileApi } from "../api/coach";
 import type { CoachMessage, LogCheckInRequest, UpdateProfileRequest } from "../types";
 
+/** `signal` ile gönderilir — kullanıcı "durdur"a basınca istek iptal edilebilsin diye. */
 export function useCoachChat() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (messages: CoachMessage[]) => coachApi.chat(messages),
+    mutationFn: ({ messages, signal }: { messages: CoachMessage[]; signal?: AbortSignal }) =>
+      coachApi.chat(messages, signal),
     // Coach may have logged food/weight/check-ins via tools → refresh those tiles.
     onSuccess: (res) => {
       res.actions?.forEach((domain) => qc.invalidateQueries({ queryKey: [domain] }));

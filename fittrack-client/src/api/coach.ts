@@ -2,8 +2,10 @@ import api from "./axios";
 import type { CheckIn, CoachChatResponse, CoachMessage, LogCheckInRequest, Profile, UpdateProfileRequest } from "../types";
 
 export const coachApi = {
-  chat: (messages: CoachMessage[]) =>
-    api.post<CoachChatResponse>("/coach/chat", { messages }, { timeout: 65000 }).then((r) => r.data),
+  chat: (messages: CoachMessage[], signal?: AbortSignal) =>
+    api
+      .post<CoachChatResponse>("/coach/chat", { messages }, { timeout: 65000, signal })
+      .then((r) => r.data),
   history: () => api.get<CoachMessage[]>("/coach/history").then((r) => r.data),
 };
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Send, Trash2, X } from "lucide-react";
+import axios from "axios";
+import { Pencil, Send, Square, Trash2, X } from "lucide-react";
 import { useCoachChat } from "../hooks/useCoach";
 import type { CoachMessage } from "../types";
 
@@ -20,45 +21,63 @@ export default function CoachChat() {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const chat = useCoachChat();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Bileşen giderken uçan istek kalmasın.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (messages.length === 0 && !chat.isPending) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, chat.isPending]);
 
+  /** Geçmişi API'ye yollar. Son mesaj her zaman "user" olmalı — bkz. `send`. */
+  const ask = (history: CoachMessage[]) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    chat.mutate(
+      { messages: history, signal: controller.signal },
+      {
+        onSuccess: (res) => setMessages((m) => [...m, { role: "assistant", content: res.reply }]),
+        onError: (err) => {
+          if (axios.isCancel(err)) return; // kullanıcı durdurdu, hata değil
+          setMessages((m) => [
+            ...m,
+            { role: "assistant", content: "⚠️ Sana ulaşamadım. Backend + API anahtarı çalışıyor mu bir bak." },
+          ]);
+        },
+        onSettled: () => {
+          if (abortRef.current === controller) abortRef.current = null;
+        },
+      }
+    );
+  };
+
+  const stop = () => abortRef.current?.abort();
+
   const send = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || chat.isPending) return;
 
-    // If we're editing an existing message, replace it and resend the updated history
+    // Düzenlemede: mesajı değiştir ve ondan SONRASINI at. Anthropic API'si son turu
+    // assistant olan isteği reddediyor (prefill kaldırıldı) — eski kuyruğu bırakmak
+    // hem 400 veriyordu hem de cevabı bayat geçmişin ardına ekliyordu.
     if (editingIdx !== null) {
-      const updated = [...messages];
-      updated[editingIdx] = { role: "user" as const, content: trimmed };
+      const updated: CoachMessage[] = [
+        ...messages.slice(0, editingIdx),
+        { role: "user", content: trimmed },
+      ];
       setMessages(updated);
       setEditingIdx(null);
       setInput("");
-      chat.mutate(updated, {
-        onSuccess: (res) => setMessages((m) => [...m, { role: "assistant", content: res.reply }]),
-        onError: () =>
-          setMessages((m) => [
-            ...m,
-            { role: "assistant", content: "⚠️ Sana ulaşamadım. Backend + API anahtarı çalışıyor mu bir bak." },
-          ]),
-      });
+      ask(updated);
       return;
     }
 
     const next: CoachMessage[] = [...messages, { role: "user", content: trimmed }];
     setMessages(next);
     setInput("");
-    chat.mutate(next, {
-      onSuccess: (res) => setMessages((m) => [...m, { role: "assistant", content: res.reply }]),
-      onError: () =>
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: "⚠️ Sana ulaşamadım. Backend + API anahtarı çalışıyor mu bir bak." },
-        ]),
-    });
+    ask(next);
   };
 
   const deleteMessage = (idx: number) => {
@@ -154,14 +173,26 @@ export default function CoachChat() {
           placeholder={editingIdx !== null ? "Mesajı düzelt..." : "Nasıl hissediyorsun?"}
           className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:bg-panel"
         />
-        <button
-          type="submit"
-          disabled={!input.trim() || chat.isPending}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white press hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label={editingIdx !== null ? "Düzelt ve gönder" : "Gönder"}
-        >
-          {editingIdx !== null ? <Pencil size={18} /> : <Send size={18} />}
-        </button>
+        {chat.isPending ? (
+          <button
+            type="button"
+            onClick={stop}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card2 text-neutral-200 press hover:bg-white/[0.09]"
+            aria-label="Durdur"
+            title="Durdur"
+          >
+            <Square size={16} fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white press hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={editingIdx !== null ? "Düzelt ve gönder" : "Gönder"}
+          >
+            {editingIdx !== null ? <Pencil size={18} /> : <Send size={18} />}
+          </button>
+        )}
       </form>
     </div>
   );
