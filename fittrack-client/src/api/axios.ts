@@ -1,20 +1,19 @@
 import axios from "axios";
-import { clearApiKey, getApiKey, UNAUTHORIZED_EVENT } from "./auth";
 
-// Use 127.0.0.1 (not "localhost"): Kestrel binds IPv4 (0.0.0.0), while "localhost"
-// resolves to IPv6 ::1 first on Windows → each request pays an IPv6 connect timeout
-// before falling back to IPv4. 127.0.0.1 avoids that per-request delay.
+/** Oturum düştüğünde (401) yayınlanır — SessionGate bunu dinleyip giriş ekranına döner. */
+export const UNAUTHORIZED_EVENT = "fittrack:unauthorized";
+
+// Arayüz ve API aynı origin'den çalışır: üretimde tek servis, yerelde Vite proxy'si
+// (bkz. vite.config.ts). Böylece oturum çerezi SameSite=Strict kalabilir ve CORS gerekmez.
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api",
-  headers: { "Content-Type": "application/json" },
+  baseURL: import.meta.env.VITE_API_URL ?? "/api",
+  headers: {
+    "Content-Type": "application/json",
+    // CSRF kalkanı: sunucu durum değiştiren her isteğin bu başlığı taşımasını ister.
+    "X-Requested-With": "FitTrack",
+  },
+  withCredentials: true,
   timeout: 8000,
-});
-
-// Her isteğe parolayı ekle.
-api.interceptors.request.use((config) => {
-  const key = getApiKey();
-  if (key) config.headers.set("X-Api-Key", key);
-  return config;
 });
 
 // 204 No Content → `null`. ASP.NET Core'da `Ok(null)` gövdesiz 204 döner; axios bunu
@@ -26,12 +25,13 @@ api.interceptors.response.use((response) => {
   return response;
 });
 
-// Parola reddedildiyse sakladığımızı at ve kilit ekranını çağır.
+// Oturum düştüyse (süre doldu, parola başka cihazda değişti, hesap silindi) giriş ekranına dön.
+// Giriş/kayıt/me uçlarının 401'i "oturum yok" demek, olay değil — onları kendi çağıranı ele alır.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      clearApiKey();
+    const url = axios.isAxiosError(error) ? (error.config?.url ?? "") : "";
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !url.startsWith("/auth/")) {
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
     return Promise.reject(error);

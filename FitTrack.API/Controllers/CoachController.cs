@@ -1,8 +1,10 @@
 using System.Text.Json.Nodes;
 using FitTrack.API.Data;
 using FitTrack.API.Models;
+using FitTrack.API.Security;
 using FitTrack.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitTrack.API.Controllers;
@@ -14,6 +16,8 @@ public class CoachController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly CoachService _coach;
+
+    private const int MaxMessages = 60;
 
     public CoachController(AppDbContext db, CoachService coach)
     {
@@ -36,13 +40,16 @@ public class CoachController : ControllerBase
 
     // POST /api/coach/chat
     [HttpPost("chat")]
+    [EnableRateLimiting(RateLimits.Coach)]
     public async Task<ActionResult<CoachChatResponse>> Chat(CoachChatRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_coach.ApiKey))
-            return StatusCode(500, new { error = "Anthropic API anahtarı ayarlı değil (Anthropic:ApiKey)." });
+        if (!await _coach.HasKeyAsync(ct))
+            return StatusCode(403, new { error = "AI özellikleri için kendi Anthropic API anahtarını eklemelisin.", code = "ai_key_missing" });
 
-        if (req.Messages.Count == 0)
+        if (req.Messages is null || req.Messages.Count == 0)
             return BadRequest(new { error = "Boş mesaj." });
+        if (req.Messages.Count > MaxMessages || req.Messages.Any(m => (m.Content?.Length ?? 0) > CoachService.MaxMessageChars))
+            return BadRequest(new { error = "Konuşma çok uzun. Yeni bir sohbet başlat." });
 
         // Save the user's last message to history.
         var lastUser = req.Messages.LastOrDefault(m => m.Role == "user");
@@ -63,7 +70,10 @@ public class CoachController : ControllerBase
         if (messages.Count == 0) return BadRequest(new { error = "Geçerli mesaj yok." });
 
         var result = await _coach.ChatAsync(messages, ct: ct);
-        if (!result.Ok) return StatusCode(502, new { error = "Koç yanıt veremedi." });
+        if (!result.Ok)
+            return result.KeyRejected
+                ? StatusCode(403, new { error = "Anthropic anahtarını reddetti. Hesap ayarlarından yenile.", code = "ai_key_rejected" })
+                : StatusCode(502, new { error = "Koç yanıt veremedi." });
 
         if (!string.IsNullOrWhiteSpace(result.Reply))
             _db.CoachMessages.Add(new CoachMessageRecord { Id = Guid.NewGuid(), Role = "assistant", Content = result.Reply, CreatedAt = DateTime.Now });

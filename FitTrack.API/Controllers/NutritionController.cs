@@ -43,7 +43,7 @@ public class NutritionController : ControllerBase
     [HttpPut("log/{id:guid}")]
     public async Task<ActionResult<MealEntry>> UpdateLog(Guid id, LogFoodRequest req)
     {
-        var entry = await _db.MealEntries.FindAsync(id);
+        var entry = await _db.MealEntries.FirstOrDefaultAsync(m => m.Id == id);
         if (entry is null) return NotFound();
 
         entry.FoodName = req.FoodName;
@@ -97,7 +97,7 @@ public class NutritionController : ControllerBase
     [HttpDelete("log/{id:guid}")]
     public async Task<IActionResult> DeleteLog(Guid id)
     {
-        var entry = await _db.MealEntries.FindAsync(id);
+        var entry = await _db.MealEntries.FirstOrDefaultAsync(m => m.Id == id);
         if (entry is null) return NotFound();
         _db.MealEntries.Remove(entry);
         await _db.SaveChangesAsync();

@@ -1,0 +1,23 @@
+# Testler Linux container'da koşar: Windows'ta Smart App Control yeni derlenen DLL'leri
+# itibar sorgusuyla rastgele engelliyor (bkz. README GOTCHAS). Coverage raporu /out'a yazılır.
+#   docker build -f Dockerfile.test -t fittrack-tests .
+#   docker run --rm -v "${PWD}/docs/reports/coverage:/out" fittrack-tests
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+WORKDIR /src
+RUN dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.3.11
+ENV PATH="$PATH:/root/.dotnet/tools"
+COPY FitTrack.API/*.csproj FitTrack.API/
+COPY FitTrack.Tests/*.csproj FitTrack.Tests/
+RUN dotnet restore FitTrack.Tests/FitTrack.Tests.csproj
+COPY FitTrack.API/ FitTrack.API/
+COPY FitTrack.Tests/ FitTrack.Tests/
+RUN dotnet build FitTrack.Tests/FitTrack.Tests.csproj -c Release --no-restore
+CMD dotnet test FitTrack.Tests/FitTrack.Tests.csproj -c Release --no-build \
+      --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal" \
+      --results-directory /tmp/results \
+      --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura \
+      DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[FitTrack.API]FitTrack.API.Migrations.*" \
+    ; status=$? \
+    ; reportgenerator -reports:"/tmp/results/**/coverage.cobertura.xml" -targetdir:/out -reporttypes:"MarkdownSummaryGithub;Cobertura;TextSummary" \
+    ; cp /tmp/results/*.trx /out/ 2>/dev/null \
+    ; exit $status

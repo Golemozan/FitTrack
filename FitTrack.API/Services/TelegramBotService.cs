@@ -1,18 +1,23 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using FitTrack.API.Data;
 using FitTrack.API.Models;
+using FitTrack.API.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitTrack.API.Services;
 
 /// <summary>
 /// Telegram polling bot — ince sarmalayıcı, koçun beyni <see cref="CoachService"/>'te.
-/// Gelen chat id'yi AppSettings'e kaydeder ki proaktif servis oradan yazabilsin.
+/// Her sohbet tek bir hesaba bağlıdır. Bağlama web'den alınan tek kullanımlık kodla yapılır
+/// (<c>/link KOD</c>); bağlı olmayan sohbet hiçbir veriye dokunamaz.
 /// </summary>
 public class TelegramBotService : BackgroundService
 {
-    public const string ChatIdKey = "telegram.chatId";
+    /// <summary>Tek kullanıcılı dönemin sahip sohbeti — yalnız eski veri sahiplenilirken okunur.</summary>
+    public const string LegacyChatIdKey = "telegram.chatId";
 
     /// <summary>
     /// Ard arda kaç 409 Conflict'ten sonra yoklama tamamen bırakılır.
@@ -21,15 +26,39 @@ public class TelegramBotService : BackgroundService
     /// </summary>
     private const int MaxConsecutiveConflicts = 6;
 
+    private const int MaxLinkAttempts = 5;
+    private static readonly TimeSpan LinkAttemptWindow = TimeSpan.FromMinutes(15);
+    private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // karışan karakterler yok
+
     private readonly IServiceScopeFactory _scope;
+    private readonly IHttpClientFactory _http;
     private readonly IConfiguration _cfg;
     private readonly ILogger<TelegramBotService> _log;
+    private readonly ConcurrentDictionary<long, (int Count, DateTime WindowStart)> _linkAttempts = new();
 
-    public TelegramBotService(IServiceScopeFactory scope, IConfiguration cfg, ILogger<TelegramBotService> log)
+    public TelegramBotService(IServiceScopeFactory scope, IHttpClientFactory http, IConfiguration cfg, ILogger<TelegramBotService> log)
     {
         _scope = scope;
+        _http = http;
         _cfg = cfg;
         _log = log;
+    }
+
+    public static bool IsEnabled(IConfiguration cfg) =>
+        !string.IsNullOrEmpty(cfg["Telegram:BotToken"])
+        && bool.TryParse(cfg["Telegram:Polling"], out var polling) && polling;
+
+    public static string NewLinkCode() =>
+        new(Enumerable.Range(0, 8).Select(_ => CodeAlphabet[RandomNumberGenerator.GetInt32(CodeAlphabet.Length)]).ToArray());
+
+    public static string HashLinkCode(string code) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
+
+    public static long? LegacyChatId(IConfiguration cfg, AppDbContext db)
+    {
+        if (long.TryParse(cfg["Telegram:ChatId"], out var fromCfg)) return fromCfg;
+        var setting = db.AppSettings.AsNoTracking().FirstOrDefault(s => s.Key == LegacyChatIdKey);
+        return long.TryParse(setting?.Value, out var fromDb) ? fromDb : null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -46,7 +75,7 @@ public class TelegramBotService : BackgroundService
         // veritabanına bakıp cevap yazar ve kullanıcı çelişkili yanıtlar görür.
         // Bu yüzden yoklama açıkça izin verilmeden başlamaz — yerelde uygulamayı
         // çalıştırmak canlıdaki botu kaçırmaz.
-        if (!bool.TryParse(_cfg["Telegram:Polling"], out var polling) || !polling)
+        if (!IsEnabled(_cfg))
         {
             _log.LogInformation(
                 "Telegram yoklaması kapalı (Telegram:Polling ayarlı değil). Bot başlatılmadı.");
@@ -54,11 +83,8 @@ public class TelegramBotService : BackgroundService
         }
 
         // Acknowledge any pending updates so we start fresh.
-        using (var http = new HttpClient())
-        {
-            try { await http.GetAsync($"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true", ct); }
-            catch { }
-        }
+        try { await _http.CreateClient().GetAsync($"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true", ct); }
+        catch { }
 
         long lastId = 0;
         var conflicts = 0;
@@ -68,7 +94,8 @@ public class TelegramBotService : BackgroundService
         {
             try
             {
-                using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(35) };
+                var c = _http.CreateClient();
+                c.Timeout = TimeSpan.FromSeconds(35);
                 var resp = await c.GetAsync(
                     $"https://api.telegram.org/bot{token}/getUpdates?timeout=30&offset={lastId + 1}", ct);
                 var body = await resp.Content.ReadAsStringAsync(ct);
@@ -125,37 +152,76 @@ public class TelegramBotService : BackgroundService
         }
     }
 
-    async Task HandleUpdate(string token, JsonNode? upd, CancellationToken ct)
+    internal async Task HandleUpdate(string token, JsonNode? upd, CancellationToken ct)
     {
         var msg = upd?["message"];
-        var text = (string?)msg?["text"];
+        var text = ((string?)msg?["text"])?.Trim();
         var chatId = (long?)msg?["chat"]?["id"];
+        var chatType = (string?)msg?["chat"]?["type"];
 
         if (string.IsNullOrEmpty(text) || chatId is null) return;
+
+        // Grup sohbetinde herkes okur — sağlık verisi yalnız özel sohbette konuşulur.
+        if (chatType != "private")
+        {
+            await SendTelegram(token, chatId.Value, "Koç yalnız özel sohbette çalışır.");
+            return;
+        }
 
         using var scope = _scope.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        // Sahiplik kontrolü — bot kullanıcı adı herkese açık aranabilir, veri sadece sahibinin.
-        if (!await IsOwnerAsync(db, chatId.Value))
+        var user = await db.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId, ct);
+
+        var command = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var verb = command[0].Split('@')[0].ToLowerInvariant(); // "/link@BotAdi" biçimi
+        var arg = command.Length > 1 ? command[1].Trim() : "";
+
+        if (verb is "/link" or "/start" && arg.Length > 0)
         {
-            _log.LogWarning("Yetkisiz Telegram sohbeti reddedildi: {ChatId}", chatId);
-            await SendTelegram(token, chatId.Value, "Bu bot kişisel kullanım için. Erişimin yok.");
+            await LinkAsync(db, token, chatId.Value, arg, ct);
             return;
         }
 
-        if (text.StartsWith("/start"))
+        if (user is null)
+        {
+            await SendTelegram(token, chatId.Value,
+                "Bu sohbet bir FitTrack hesabına bağlı değil. Web'de Hesap → Telegram bölümünden kod al, " +
+                "sonra buraya /link KOD yaz.");
+            return;
+        }
+
+        if (verb == "/unlink")
+        {
+            user.TelegramChatId = null;
+            await db.SaveChangesAsync(ct);
+            await SendTelegram(token, chatId.Value, "Bağlantı kaldırıldı. Bu sohbet artık hesabına erişemez.");
+            return;
+        }
+
+        if (verb == "/start")
         {
             await SendTelegram(token, chatId.Value, "Koç hazır. Ne yediğini, kilonu, nasıl hissettiğini yaz — takip ederim. Soru da sorabilirsin: \"bu hafta nasıl gidiyor?\"");
             return;
         }
-        if (text.StartsWith("/")) return;
+        if (text.StartsWith('/')) return;
+
+        // Bu kapsamdaki her sorgu ve kayıt yalnız bu kullanıcıya ait.
+        scope.ServiceProvider.GetRequiredService<CurrentUser>().ActAs(user.Id);
+        var coach = scope.ServiceProvider.GetRequiredService<CoachService>();
+
+        if (!await coach.HasKeyAsync(ct))
+        {
+            await SendTelegram(token, chatId.Value,
+                "Koçu kullanmak için kendi Anthropic API anahtarını eklemen gerekiyor: web'de Hesap → AI anahtarı.");
+            return;
+        }
 
         // Typing indicator
-        using (var http = new HttpClient())
-            await http.GetAsync($"https://api.telegram.org/bot{token}/sendChatAction?chat_id={chatId}&action=typing", ct);
+        try { await _http.CreateClient().GetAsync($"https://api.telegram.org/bot{token}/sendChatAction?chat_id={chatId}&action=typing", ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { /* yalnız "yazıyor" göstergesi */ }
 
-        var coach = scope.ServiceProvider.GetRequiredService<CoachService>();
+        if (text.Length > CoachService.MaxMessageChars) text = text[..CoachService.MaxMessageChars];
 
         // Save user message
         db.CoachMessages.Add(new CoachMessageRecord { Id = Guid.NewGuid(), Role = "user", Content = text, CreatedAt = DateTime.Now });
@@ -171,11 +237,15 @@ public class TelegramBotService : BackgroundService
         var messages = new JsonArray();
         foreach (var h in history.TakeLast(30))
             messages.Add(new JsonObject { ["role"] = h.Role, ["content"] = h.Content });
+        // TakeLast ilk mesajı assistant yapabilir; Anthropic konuşmanın user ile başlamasını ister.
+        while (messages.Count > 0 && (string?)messages[0]?["role"] != "user") messages.RemoveAt(0);
 
         var result = await coach.ChatAsync(messages, ct: ct);
         if (!result.Ok)
         {
-            await SendTelegram(token, chatId.Value, "Koç şu an cevap veremedi.");
+            await SendTelegram(token, chatId.Value, result.KeyRejected
+                ? "Anthropic anahtarını reddetti. Web'de Hesap → AI anahtarı bölümünden yenile."
+                : "Koç şu an cevap veremedi.");
             return;
         }
 
@@ -187,33 +257,51 @@ public class TelegramBotService : BackgroundService
         }
     }
 
-    /// <summary>
-    /// Sahip <c>Telegram:ChatId</c> ile açıkça belirlenir. Belirlenmediyse ilk yazan sohbet
-    /// sahiplenir ve bir daha değişmez — yabancı biri gelip proaktif mesajları üstüne alamaz.
-    /// </summary>
-    async Task<bool> IsOwnerAsync(AppDbContext db, long chatId)
+    async Task LinkAsync(AppDbContext db, string token, long chatId, string code, CancellationToken ct)
     {
-        if (long.TryParse(_cfg["Telegram:ChatId"], out var configured))
-            return configured == chatId;
-
-        var setting = await db.AppSettings.FindAsync(ChatIdKey);
-        if (setting is null)
+        // Kod 32^8 olasılık; yine de sohbet başına deneme sınırı var.
+        var now = DateTime.UtcNow;
+        var attempt = _linkAttempts.AddOrUpdate(chatId,
+            _ => (1, now),
+            (_, prev) => now - prev.WindowStart > LinkAttemptWindow ? (1, now) : (prev.Count + 1, prev.WindowStart));
+        if (attempt.Count > MaxLinkAttempts)
         {
-            db.AppSettings.Add(new AppSetting { Key = ChatIdKey, Value = chatId.ToString() });
-            await db.SaveChangesAsync();
-            _log.LogInformation("Telegram sahibi bu sohbete bağlandı: {ChatId}", chatId);
-            return true;
+            await SendTelegram(token, chatId, "Çok fazla deneme. Biraz sonra tekrar dene.");
+            return;
         }
 
-        return setting.Value == chatId.ToString();
+        var hash = HashLinkCode(code);
+        var target = await db.Users.FirstOrDefaultAsync(u =>
+            u.TelegramLinkCodeHash == hash && u.TelegramLinkCodeExpiresAt != null && u.TelegramLinkCodeExpiresAt > now, ct);
+        if (target is null)
+        {
+            await SendTelegram(token, chatId, "Kod geçersiz ya da süresi dolmuş. Web'den yeni kod al.");
+            return;
+        }
+
+        // Bu sohbet başka hesaba bağlıysa önce oradan çöz — bir sohbet tek hesaba bakar.
+        var previous = await db.Users.Where(u => u.TelegramChatId == chatId && u.Id != target.Id).ToListAsync(ct);
+        foreach (var p in previous) p.TelegramChatId = null;
+        await db.SaveChangesAsync(ct);
+
+        target.TelegramChatId = chatId;
+        target.TelegramLinkCodeHash = null; // tek kullanımlık
+        target.TelegramLinkCodeExpiresAt = null;
+        await db.SaveChangesAsync(ct);
+        _linkAttempts.TryRemove(chatId, out _);
+
+        _log.LogInformation("Telegram sohbeti hesaba bağlandı: {UserId}", target.Id);
+        await SendTelegram(token, chatId, $"Bağlandı, {target.DisplayName}. Artık buradan da yazabilirsin. Kaldırmak için /unlink.");
     }
 
-    public static async Task SendTelegram(string token, long chat, string text)
+    private Task SendTelegram(string token, long chat, string text) => SendTelegram(_http, token, chat, text);
+
+    public static async Task SendTelegram(IHttpClientFactory factory, string token, long chat, string text)
     {
         try
         {
             if (text.Length > 4000) text = text[..4000];
-            using var http = new HttpClient();
+            var http = factory.CreateClient();
             var body = new JsonObject { ["chat_id"] = chat, ["text"] = text }.ToJsonString();
             await http.PostAsync(
                 $"https://api.telegram.org/bot{token}/sendMessage",

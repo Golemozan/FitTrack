@@ -38,7 +38,7 @@ public class ProfileController : ControllerBase
         {
             profile = new Profile
             {
-                Id = AppDbContext.DefaultProfileId,
+                Id = Guid.NewGuid(),
                 UpdatedAt = DateTime.UtcNow,
             };
             _db.Profiles.Add(profile);

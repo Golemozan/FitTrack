@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Pencil, Send, Square, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiError, apiErrorCode, type Session } from "../api/auth";
 import { useCoachChat } from "../hooks/useCoach";
+import { SESSION_KEY, useSession } from "../hooks/useSession";
 import type { CoachMessage } from "../types";
 
-const GREETING =
-  "Selam Ozan. Ben Koç. Spor bilimleri ve beslenme biyokimyası temelinde çalışıyorum. Ne yediğini, nasıl hissettiğini, antrenmanını anlat — verilerinle birlikte analiz edip yönlendireyim.";
+const greeting = (name: string) =>
+  `Selam${name ? ` ${name}` : ""}. Ben Koç. Spor bilimleri ve beslenme biyokimyası temelinde çalışıyorum. Ne yediğini, nasıl hissettiğini, antrenmanını anlat — verilerinle birlikte analiz edip yönlendireyim.`;
 
 const SUGGESTIONS = [
   "Kilo trendimi yorumla",
@@ -15,7 +18,9 @@ const SUGGESTIONS = [
 ];
 
 /** Full-height coach conversation — fills whatever container it's dropped into. */
-export default function CoachChat() {
+export default function CoachChat({ onKeyProblem }: { onKeyProblem?: () => void }) {
+  const qc = useQueryClient();
+  const name = useSession().data?.displayName ?? "";
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [input, setInput] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -41,9 +46,17 @@ export default function CoachChat() {
         onSuccess: (res) => setMessages((m) => [...m, { role: "assistant", content: res.reply }]),
         onError: (err) => {
           if (axios.isCancel(err)) return; // kullanıcı durdurdu, hata değil
+          const code = apiErrorCode(err);
+          if (code === "ai_key_missing") {
+            // Anahtar silinmiş: oturum bayrağını düşür, kart "anahtar ekle" durumuna döner.
+            qc.setQueryData<Session | null>(SESSION_KEY, (s) => (s ? { ...s, aiEnabled: false } : s));
+            onKeyProblem?.();
+            return;
+          }
+          if (code === "ai_key_rejected") onKeyProblem?.();
           setMessages((m) => [
             ...m,
-            { role: "assistant", content: "⚠️ Sana ulaşamadım. Backend + API anahtarı çalışıyor mu bir bak." },
+            { role: "assistant", content: `⚠️ ${apiError(err, "Sana ulaşamadım. Birazdan tekrar dene.")}` },
           ]);
         },
         onSettled: () => {
@@ -109,7 +122,7 @@ export default function CoachChat() {
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         <Bubble
           role="assistant"
-          content={GREETING}
+          content={greeting(name)}
           index={-1}
           onDelete={undefined}
           onEdit={undefined}

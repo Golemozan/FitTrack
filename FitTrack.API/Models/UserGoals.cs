@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
 namespace FitTrack.API.Models;
 
-public class UserGoals
+public class UserGoals : IUserOwned
 {
+    [JsonIgnore]
+    public Guid UserId { get; set; }
+
     public Guid Id { get; set; }
     public double CalorieGoal { get; set; }
     public double ProteinGoal { get; set; }

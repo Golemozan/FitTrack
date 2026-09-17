@@ -3,11 +3,13 @@ using System.Text;
 using System.Text.Json.Nodes;
 using FitTrack.API.Data;
 using FitTrack.API.Models;
+using FitTrack.API.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitTrack.API.Services;
 
-public record CoachResult(string Reply, List<string> Actions, bool Ok);
+/// <param name="KeyRejected">Anthropic kullanıcının anahtarını reddetti (iptal edilmiş/geçersiz) — kullanıcı yenilemeli.</param>
+public record CoachResult(string Reply, List<string> Actions, bool Ok, bool KeyRejected = false);
 
 /// <summary>
 /// Koçun tek beyni. Web controller ve Telegram bot bunu sarar —
@@ -18,31 +20,48 @@ public class CoachService
     private const string Model = "claude-sonnet-5";
     private const string AnthropicUrl = "https://api.anthropic.com/v1/messages";
 
+    /// <summary>Tek mesajın üst sınırı. Web ve Telegram aynı sınırı uygular.</summary>
+    public const int MaxMessageChars = 8000;
+
+    /// <summary>Veri yazan araçlar. Salt-okunur çağrılarda (gece özeti) modele hiç verilmez.</summary>
+    private static readonly HashSet<string> WriteTools = new() { "log_food", "log_weight", "log_checkin", "delete_meal", "edit_meal", "remember", "forget" };
+
     private readonly AppDbContext _db;
     private readonly IHttpClientFactory _httpFactory;
-    private readonly IConfiguration _config;
+    private readonly CurrentUser _currentUser;
+    private readonly ApiKeyService _keys;
     private readonly ILogger<CoachService> _log;
 
-    public CoachService(AppDbContext db, IHttpClientFactory httpFactory, IConfiguration config, ILogger<CoachService> log)
+    public CoachService(AppDbContext db, IHttpClientFactory httpFactory, CurrentUser currentUser, ApiKeyService keys, ILogger<CoachService> log)
     {
         _db = db;
         _httpFactory = httpFactory;
-        _config = config;
+        _currentUser = currentUser;
+        _keys = keys;
         _log = log;
     }
 
-    public string? ApiKey => _config["Anthropic:ApiKey"] ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+    /// <summary>
+    /// Sunucu genelinde paylaşılan bir anahtar YOK. Her kullanıcı kendi anahtarıyla konuşur;
+    /// anahtarı olmayan AI özelliklerini kullanamaz.
+    /// </summary>
+    public Task<bool> HasKeyAsync(CancellationToken ct = default) => _keys.HasKeyAsync(_currentUser.Require(), ct);
 
     /// <summary>
     /// Agentic döngü: Claude'u çağır, istediği tool'ları çalıştır, sonuçları geri ver,
     /// tool istemeyi bırakana kadar tekrarla (runaway'e karşı sınırlı).
     /// messages: {role, content} düz metin geçmişi. Tool turları döngü içinde eklenir.
     /// </summary>
-    public async Task<CoachResult> ChatAsync(JsonArray messages, string? extraSystem = null, CancellationToken ct = default)
+    public async Task<CoachResult> ChatAsync(JsonArray messages, string? extraSystem = null, bool readOnly = false, CancellationToken ct = default)
     {
-        var apiKey = ApiKey;
+        var apiKey = await _keys.GetPlaintextAsync(_currentUser.Require(), ct);
         if (string.IsNullOrWhiteSpace(apiKey))
             return new CoachResult("", new(), false);
+
+        var tools = BuildTools();
+        if (readOnly)
+            foreach (var t in tools.Where(t => WriteTools.Contains((string?)t?["name"] ?? "")).ToList())
+                tools.Remove(t);
 
         var system = await BuildSystemPromptAsync();
         if (!string.IsNullOrWhiteSpace(extraSystem))
@@ -58,12 +77,12 @@ public class CoachService
                 ["model"] = Model,
                 ["max_tokens"] = 4096,
                 ["system"] = system,
-                ["tools"] = BuildTools(),
+                ["tools"] = tools.DeepClone(),
                 ["messages"] = messages.DeepClone(),
             };
 
-            var (ok, body) = await CallAnthropicAsync(apiKey, payload, ct);
-            if (!ok) return new CoachResult("", actions, false);
+            var (ok, status, body) = await CallAnthropicAsync(apiKey, payload, ct);
+            if (!ok) return new CoachResult("", actions, false, KeyRejected: status is 401 or 403);
 
             JsonNode? root;
             try { root = JsonNode.Parse(body); }
@@ -87,7 +106,9 @@ public class CoachService
                 if ((string?)block?["type"] != "tool_use") continue;
                 var id = (string?)block!["id"] ?? "";
                 var name = (string?)block["name"] ?? "";
-                var (resultText, domain, isError) = await ExecuteToolAsync(name, block["input"]);
+                var (resultText, domain, isError) = readOnly && WriteTools.Contains(name)
+                    ? ("Bu çağrıda veri yazılamaz.", null, true)
+                    : await ExecuteToolAsync(name, block["input"]);
                 if (domain is not null && !isError) actions.Add(domain);
                 toolResults.Add(new JsonObject
                 {
@@ -103,7 +124,7 @@ public class CoachService
         return new CoachResult(reply.Trim(), actions.Distinct().ToList(), true);
     }
 
-    private async Task<(bool ok, string body)> CallAnthropicAsync(string apiKey, JsonObject payload, CancellationToken ct)
+    private async Task<(bool ok, int status, string body)> CallAnthropicAsync(string apiKey, JsonObject payload, CancellationToken ct)
     {
         var http = _httpFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(90);
@@ -115,11 +136,11 @@ public class CoachService
         {
             var resp = await http.SendAsync(request, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
-            if (!resp.IsSuccessStatusCode) { _log.LogError("Anthropic {Status}: {Body}", (int)resp.StatusCode, body); return (false, body); }
-            return (true, body);
+            if (!resp.IsSuccessStatusCode) { _log.LogError("Anthropic {Status}: {Body}", (int)resp.StatusCode, body); return (false, (int)resp.StatusCode, body); }
+            return (true, 200, body);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; } // kullanıcı durdurdu
-        catch (Exception ex) { _log.LogError(ex, "Anthropic call failed."); return (false, ""); }
+        catch (Exception ex) { _log.LogError("Anthropic çağrısı başarısız: {Type}", ex.GetType().Name); return (false, 0, ""); }
     }
 
     // ===================== TOOLS =====================
@@ -156,7 +177,7 @@ public class CoachService
     public static JsonArray BuildTools() => new()
     {
         Tool("log_food",
-            "Ozan bir şey yediğinde besini günlüğe ekle. Makro tahmini için BESLENME REFERANSI tablosunu kullan. calories/protein/carbs/fat TOPLAM tüketilen miktar (100g başına değil). Birden fazla besin = her biri için ayrı çağrı.",
+            "kullanıcı bir şey yediğinde besini günlüğe ekle. Makro tahmini için BESLENME REFERANSI tablosunu kullan. calories/protein/carbs/fat TOPLAM tüketilen miktar (100g başına değil). Birden fazla besin = her biri için ayrı çağrı.",
             new JsonObject
             {
                 ["foodName"] = StrProp(), ["grams"] = NumProp(), ["calories"] = NumProp(),
@@ -166,12 +187,12 @@ public class CoachService
             "foodName", "grams", "calories", "protein", "carbs", "fat", "mealType"),
 
         Tool("log_weight",
-            "Ozan kilosunu söylediğinde kaydet. Aynı gün için varsa üstüne yazar. 'dün 92'ydim' gibi geçmiş tarih için date ver.",
+            "kullanıcı kilosunu söylediğinde kaydet. Aynı gün için varsa üstüne yazar. 'dün 92'ydim' gibi geçmiş tarih için date ver.",
             new JsonObject { ["weightKg"] = NumProp(), ["notes"] = StrProp(), ["date"] = DateProp() },
             "weightKg"),
 
         Tool("log_checkin",
-            "Ozan ruh hali, enerji ya da açlık/tokluk belirttiğinde check-in kaydet. Ölçekler 1-5. Açlık: 1=çok aç, 5=çok tok.",
+            "kullanıcı ruh hali, enerji ya da açlık/tokluk belirttiğinde check-in kaydet. Ölçekler 1-5. Açlık: 1=çok aç, 5=çok tok.",
             new JsonObject
             {
                 ["mood"] = IntProp(), ["energy"] = IntProp(), ["hunger"] = IntProp(),
@@ -215,7 +236,7 @@ public class CoachService
             new JsonObject { ["days"] = IntProp("Kaç gün (varsayılan 14, maks 90)") }),
 
         Tool("remember",
-            "KALICI NOT kaydet. Ozan sakatlık ('omzum ağrıyor'), kalıcı tercih ('süt sevmem'), hedef bağlamı veya önemli kişisel bilgi söylediğinde KULLAN. Chat geçmişi 3 günde silinir — bunlar kalır ve her konuşmada görünür. Gündelik şeyleri KAYDETME.",
+            "KALICI NOT kaydet. kullanıcı sakatlık ('omzum ağrıyor'), kalıcı tercih ('süt sevmem'), hedef bağlamı veya önemli kişisel bilgi söylediğinde KULLAN. Chat geçmişi 3 günde silinir — bunlar kalır ve her konuşmada görünür. Gündelik şeyleri KAYDETME.",
             new JsonObject
             {
                 ["category"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray { "injury", "preference", "goal", "fact" } },
@@ -224,7 +245,7 @@ public class CoachService
             "category", "content"),
 
         Tool("forget",
-            "Kalıcı notu ID'sine göre sil. Not geçersizleştiğinde ('omzum düzeldi') veya Ozan istediğinde KULLAN. ID'ler sistem promptundaki KOÇ NOTLARI bölümünde.",
+            "Kalıcı notu ID'sine göre sil. Not geçersizleştiğinde ('omzum düzeldi') veya kullanıcı istediğinde KULLAN. ID'ler sistem promptundaki KOÇ NOTLARI bölümünde.",
             new JsonObject { ["noteId"] = StrProp("Silinecek notun GUID ID'si") },
             "noteId"),
     };
@@ -321,7 +342,7 @@ public class CoachService
                     var mealId = Str(input, "mealId");
                     if (!Guid.TryParse(mealId, out var gid))
                         return ($"Geçersiz ID: {mealId}. Önce list_meals ile ID'leri gör.", null, true);
-                    var meal = await _db.MealEntries.FindAsync(gid);
+                    var meal = await _db.MealEntries.FirstOrDefaultAsync(m => m.Id == gid);
                     if (meal is null)
                         return ($"ID:{mealId} bulunamadı. Silinmiş olabilir ya da başka bir güne ait.", null, true);
                     var desc = $"{meal.FoodName} {meal.Grams:0}g ({meal.Calories:0} kcal)";
@@ -334,7 +355,7 @@ public class CoachService
                     var mealId = Str(input, "mealId");
                     if (!Guid.TryParse(mealId, out var gid))
                         return ($"Geçersiz ID: {mealId}. Önce list_meals ile ID'leri gör.", null, true);
-                    var meal = await _db.MealEntries.FindAsync(gid);
+                    var meal = await _db.MealEntries.FirstOrDefaultAsync(m => m.Id == gid);
                     if (meal is null)
                         return ($"ID:{mealId} bulunamadı. Düzenlenemez.", null, true);
                     var oldDesc = $"{meal.FoodName} {meal.Grams:0}g ({meal.Calories:0} kcal)";
@@ -449,7 +470,7 @@ public class CoachService
                     var noteId = Str(input, "noteId");
                     if (!Guid.TryParse(noteId, out var gid))
                         return ($"Geçersiz not ID: {noteId}.", null, true);
-                    var note = await _db.CoachNotes.FindAsync(gid);
+                    var note = await _db.CoachNotes.FirstOrDefaultAsync(n => n.Id == gid);
                     if (note is null)
                         return ($"Not bulunamadı: {noteId}.", null, true);
                     _db.CoachNotes.Remove(note);
@@ -545,21 +566,27 @@ public class CoachService
 
         var notes = await _db.CoachNotes.OrderBy(n => n.CreatedAt).ToListAsync();
 
+        var userId = _currentUser.Require();
+        var rawName = await _db.Users.Where(u => u.Id == userId).Select(u => u.DisplayName).FirstOrDefaultAsync() ?? "";
+        // İsim kullanıcı girdisi ve sistem promptuna giriyor: satır sonu/kontrol karakteri ile talimat enjekte edilemesin.
+        var name = new string(rawName.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (name.Length is 0 or > 40) name = "Kullanıcı";
+
         var sb = new StringBuilder();
 
         // === [1] KİMLİK + TARZ ===
-        sb.AppendLine("Sen Koç — Ozan'ın kişisel sağlık ve fitness koçusun.");
+        sb.AppendLine($"Sen Koç — {name} adlı kullanıcının kişisel sağlık ve fitness koçusun.");
         sb.AppendLine("Beslenme biyokimyası, egzersiz fizyolojisi ve spor bilimlerinde uzmansın.");
-        sb.AppendLine("Bu Ozan'ın kişisel botu — tek kullanıcı, tam yetki, veri gizliliği derdi yok.");
+        sb.AppendLine("Yalnız bu kullanıcının verisini görürsün ve yalnız onun adına kayıt yaparsın.");
         sb.AppendLine();
         sb.AppendLine("DAVRANIŞ KURALLARI (kesinlikle uyulacak):");
         sb.AppendLine("- Türkçe konuş. Doğal konuşma dili, insan gibi.");
-        sb.AppendLine("- SELAMLAŞMA YOK. \"Selam Ozan\", \"Ben Koç\" gibi giriş cümleleri KULLANMA. Direkt konuya gir.");
+        sb.AppendLine("- SELAMLAŞMA YOK. \"Selam kullanıcı\", \"Ben Koç\" gibi giriş cümleleri KULLANMA. Direkt konuya gir.");
         sb.AppendLine("- Emoji kullanma. Aşırı övgü (harika, süper, mükemmel) kullanma.");
         sb.AppendLine("- KISA VE NET ol. Lafı dolandırma. Her cümle bilgi taşısın. Güçlü koç = doğru içgörü, uzun yanıt değil.");
         sb.AppendLine("- Hesap gerekiyorsa adım adım hesapla, sonucu göster.");
         sb.AppendLine("- Net olmayan şeyi sor ama gereksiz detay sorma. Yazım hatalarını idare et.");
-        sb.AppendLine("- PROAKTİF OL: veride dikkat çeken bir şey varsa (protein düşük, hacim düştü, kilo platoda) Ozan sormasa da söyle. Tek cümlelik gözlem yeter.");
+        sb.AppendLine("- PROAKTİF OL: veride dikkat çeken bir şey varsa (protein düşük, hacim düştü, kilo platoda) kullanıcı sormasa da söyle. Tek cümlelik gözlem yeter.");
         sb.AppendLine("- \"X gram aldım/verdim\", \"X kg çıktım\", \"tartı X gösterdi\" = kilo değişimi → log_weight.");
         sb.AppendLine();
 
@@ -572,7 +599,7 @@ public class CoachService
         sb.AppendLine("- Kaydettikten sonra TEK CÜMLE teyit + hedef/trend bağlamında kısa yorum.");
         sb.AppendLine();
         sb.AppendLine("== DÜZELTME/SİLME ==");
-        sb.AppendLine("Ozan sil/çıkar/kaldır/yanlış/düzelt/değiştir derse:");
+        sb.AppendLine("kullanıcı sil/çıkar/kaldır/yanlış/düzelt/değiştir derse:");
         sb.AppendLine("1. log_food ÇAĞIRMA — yeni kayıt ekler, üstüne bindirir!");
         sb.AppendLine("2. ÖNCE list_meals ile ID'leri gör. 3. Silme → delete_meal (her öğün ayrı). Düzeltme → edit_meal (TÜM alanlar).");
         sb.AppendLine($"Şu an: {DateTime.Now:dd.MM.yyyy HH:mm} ({TrDayName(DateTime.Now.DayOfWeek)}). Öğün: 06-11=Breakfast, 11-15=Lunch, 15-18=Snack, 18+=Dinner.");

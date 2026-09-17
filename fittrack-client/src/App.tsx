@@ -4,14 +4,15 @@ import {
   Clock3,
   Dumbbell,
   HeartPulse,
-  Lock,
+  KeyRound,
+  LogOut,
   Scale,
   Sparkles,
   Target,
+  UserRound,
   UtensilsCrossed,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { lockApp } from "./api/auth";
 import CoachChat from "./components/CoachChat";
 import CoachHistory from "./components/CoachHistory";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -19,22 +20,24 @@ import Overlay from "./components/Overlay";
 import TodayRings from "./components/TodayRings";
 import type { Ring } from "./components/TodayRings";
 import { ProgressBar } from "./components/ui";
+import AccountSection from "./sections/AccountSection";
 import CheckInSection from "./sections/CheckInSection";
 import GoalsSection from "./sections/GoalsSection";
 import NutritionSection from "./sections/NutritionSection";
 import WeightSection from "./sections/WeightSection";
 import WorkoutSection from "./sections/WorkoutSection";
 import { useProfile, useTodayCheckins } from "./hooks/useCoach";
+import { useLogout, useSession } from "./hooks/useSession";
 import { useGoals } from "./hooks/useGoals";
 import { useNutritionStreak, useTodayMeals } from "./hooks/useNutrition";
 import { useWeightStats } from "./hooks/useWeight";
 import { useTodaySession } from "./hooks/useWorkout";
 import type { MealEntry } from "./types";
 
-type View = "nutrition" | "workout" | "weight" | "goals" | "checkin" | "history";
+type View = "nutrition" | "workout" | "weight" | "goals" | "checkin" | "history" | "account";
 
 const MOODS = ["😩", "🙁", "😐", "🙂", "😄"];
-const tabs: Array<{ label: string; view: Exclude<View, "history">; icon: LucideIcon }> = [
+const tabs: Array<{ label: string; view: Exclude<View, "history" | "account">; icon: LucideIcon }> = [
   { label: "Beslenme", view: "nutrition", icon: UtensilsCrossed },
   { label: "Antrenman", view: "workout", icon: Dumbbell },
   { label: "Kilo", view: "weight", icon: Scale },
@@ -44,6 +47,8 @@ const tabs: Array<{ label: string; view: Exclude<View, "history">; icon: LucideI
 
 export default function App() {
   const [view, setView] = useState<View | null>(null);
+  const session = useSession().data;
+  const logout = useLogout();
   const today = new Date().toLocaleDateString("tr-TR", {
     weekday: "long",
     day: "numeric",
@@ -67,15 +72,24 @@ export default function App() {
         </nav>
 
         <div className="mt-auto border-t border-hair/70 pt-4">
-          <p className="mb-3 px-3 text-xs leading-5 text-neutral-500">
-            Günlük verilerin bu cihazdaki kişisel profilinde tutulur.
-          </p>
           <button
-            onClick={lockApp}
-            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-neutral-400 transition-[background-color,color] duration-150 hover:bg-card2 hover:text-neutral-100"
+            onClick={() => setView("account")}
+            aria-current={view === "account" ? "page" : undefined}
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left transition-[background-color,color] duration-150 hover:bg-card2"
           >
-            <Lock size={17} />
-            Uygulamayı kilitle
+            <UserRound size={17} className="shrink-0 text-neutral-400" />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-neutral-200">{session?.displayName}</span>
+              <span className="block truncate text-[11px] text-neutral-500">{session?.email}</span>
+            </span>
+          </button>
+          <button
+            onClick={() => logout.mutate()}
+            disabled={logout.isPending}
+            className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-neutral-400 transition-[background-color,color] duration-150 hover:bg-card2 hover:text-neutral-100"
+          >
+            <LogOut size={17} />
+            Çıkış yap
           </button>
         </div>
       </aside>
@@ -84,11 +98,11 @@ export default function App() {
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-hair/70 bg-ink/95 px-4 lg:hidden">
           <Brand compact />
           <button
-            onClick={lockApp}
+            onClick={() => setView("account")}
             className="flex h-11 w-11 items-center justify-center rounded-xl text-neutral-400 transition-colors hover:bg-card2 hover:text-neutral-100"
-            aria-label="Uygulamayı kilitle"
+            aria-label="Hesap"
           >
-            <Lock size={18} />
+            <UserRound size={18} />
           </button>
         </header>
 
@@ -142,7 +156,11 @@ export default function App() {
           </section>
 
           <ErrorBoundary label="Koç">
-            <CoachCard onHistory={() => setView("history")} />
+            <CoachCard
+              aiEnabled={session?.aiEnabled ?? false}
+              onHistory={() => setView("history")}
+              onAddKey={() => setView("account")}
+            />
           </ErrorBoundary>
         </main>
       </div>
@@ -166,6 +184,7 @@ export default function App() {
       <Overlay open={view === "weight"} onClose={() => setView(null)}><ErrorBoundary label="Kilo"><WeightSection /></ErrorBoundary></Overlay>
       <Overlay open={view === "checkin"} onClose={() => setView(null)}><ErrorBoundary label="Check-in"><CheckInSection /></ErrorBoundary></Overlay>
       <Overlay open={view === "goals"} onClose={() => setView(null)}><ErrorBoundary label="Hedefler"><GoalsSection /></ErrorBoundary></Overlay>
+      <Overlay open={view === "account"} onClose={() => setView(null)}><ErrorBoundary label="Hesap"><AccountSection /></ErrorBoundary></Overlay>
       <Overlay open={view === "history"} onClose={() => setView(null)}><ErrorBoundary label="Geçmiş"><CoachHistory onClose={() => setView(null)} /></ErrorBoundary></Overlay>
     </div>
   );
@@ -410,7 +429,7 @@ function GoalsCard({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-function CoachCard({ onHistory }: { onHistory: () => void }) {
+function CoachCard({ aiEnabled, onHistory, onAddKey }: { aiEnabled: boolean; onHistory: () => void; onAddKey: () => void }) {
   return (
     <section className="mt-5 overflow-hidden rounded-[var(--radius-panel)] border border-hair/70 bg-panel" aria-label="Koç">
       <div className="flex items-center justify-between gap-4 border-b border-hair/70 px-5 py-4 sm:px-6">
@@ -421,12 +440,34 @@ function CoachCard({ onHistory }: { onHistory: () => void }) {
             <p className="truncate text-xs text-neutral-500">Kendi verilerine göre günlük değerlendirme</p>
           </div>
         </div>
-        <button onClick={onHistory} className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-2 text-sm text-accent transition-colors hover:bg-accent/10">
-          <Clock3 size={16} />
-          Geçmiş
-        </button>
+        {aiEnabled && (
+          <button onClick={onHistory} className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-2 text-sm text-accent transition-colors hover:bg-accent/10">
+            <Clock3 size={16} />
+            Geçmiş
+          </button>
+        )}
       </div>
-      <div className="h-[24rem] p-4 sm:h-[22rem] sm:p-5"><CoachChat /></div>
+      {aiEnabled ? (
+        <div className="h-[24rem] p-4 sm:h-[22rem] sm:p-5"><CoachChat onKeyProblem={onAddKey} /></div>
+      ) : (
+        <div className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-3">
+            <div className="rounded-[var(--radius-card)] bg-card2 p-2.5 text-neutral-400"><KeyRound size={20} /></div>
+            <div>
+              <p className="text-sm font-semibold text-neutral-200">Koç kapalı</p>
+              <p className="mt-1 max-w-md text-sm leading-6 text-neutral-500">
+                AI koçu kullanmak için kendi Anthropic API anahtarını ekle. Anahtar şifreli saklanır ve geri gösterilmez.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onAddKey}
+            className="press min-h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-accentink hover:brightness-110"
+          >
+            Anahtar ekle
+          </button>
+        </div>
+      )}
     </section>
   );
 }

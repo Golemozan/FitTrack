@@ -112,7 +112,7 @@ public class WeightController : ControllerBase
     [HttpPut("log/{id:guid}")]
     public async Task<ActionResult<WeightLog>> Update(Guid id, LogWeightRequest req)
     {
-        var log = await _db.WeightLogs.FindAsync(id);
+        var log = await _db.WeightLogs.FirstOrDefaultAsync(w => w.Id == id);
         if (log is null) return NotFound();
 
         log.WeightKg = req.WeightKg;
@@ -125,7 +125,7 @@ public class WeightController : ControllerBase
     [HttpDelete("log/{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var log = await _db.WeightLogs.FindAsync(id);
+        var log = await _db.WeightLogs.FirstOrDefaultAsync(w => w.Id == id);
         if (log is null) return NotFound();
         _db.WeightLogs.Remove(log);
         await _db.SaveChangesAsync();

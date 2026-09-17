@@ -15,12 +15,13 @@ public class GoalsController : ControllerBase
     // Single-row goals: fetch existing or lazily create the default row.
     private async Task<UserGoals> GetOrCreateAsync()
     {
+        // Filtreli: yalnız oturumdaki kullanıcının hedefi. Yoksa ona özel varsayılan açılır.
         var goals = await _db.UserGoals.OrderBy(g => g.UpdatedAt).FirstOrDefaultAsync();
         if (goals is null)
         {
             goals = new UserGoals
             {
-                Id = AppDbContext.DefaultGoalsId,
+                Id = Guid.NewGuid(),
                 CalorieGoal = 2500,
                 ProteinGoal = 180,
                 CarbGoal = 250,
