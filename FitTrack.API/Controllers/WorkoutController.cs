@@ -61,7 +61,7 @@ public class WorkoutController : ControllerBase
     [HttpDelete("session/{id:guid}")]
     public async Task<IActionResult> DeleteSession(Guid id)
     {
-        var session = await _db.WorkoutSessions.FindAsync(id);
+        var session = await _db.WorkoutSessions.FirstOrDefaultAsync(w => w.Id == id);
         if (session is null) return NotFound();
         _db.WorkoutSessions.Remove(session);
         await _db.SaveChangesAsync();
@@ -122,7 +122,7 @@ public class WorkoutController : ControllerBase
     [HttpDelete("exercise/{id:guid}")]
     public async Task<IActionResult> DeleteExercise(Guid id)
     {
-        var exercise = await _db.Exercises.FindAsync(id);
+        var exercise = await _db.Exercises.FirstOrDefaultAsync(e => e.Id == id);
         if (exercise is null) return NotFound();
         _db.Exercises.Remove(exercise);
         await _db.SaveChangesAsync();
@@ -154,7 +154,7 @@ public class WorkoutController : ControllerBase
     [HttpPut("set/{id:guid}")]
     public async Task<ActionResult<ExerciseSet>> UpdateSet(Guid id, UpdateSetRequest req)
     {
-        var set = await _db.ExerciseSets.FindAsync(id);
+        var set = await _db.ExerciseSets.FirstOrDefaultAsync(s => s.Id == id);
         if (set is null) return NotFound();
 
         set.WeightKg = req.WeightKg;
@@ -168,7 +168,7 @@ public class WorkoutController : ControllerBase
     [HttpDelete("set/{id:guid}")]
     public async Task<IActionResult> DeleteSet(Guid id)
     {
-        var set = await _db.ExerciseSets.FindAsync(id);
+        var set = await _db.ExerciseSets.FirstOrDefaultAsync(s => s.Id == id);
         if (set is null) return NotFound();
         _db.ExerciseSets.Remove(set);
         await _db.SaveChangesAsync();

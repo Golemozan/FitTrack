@@ -57,7 +57,7 @@ public class CheckInController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var entry = await _db.CheckIns.FindAsync(id);
+        var entry = await _db.CheckIns.FirstOrDefaultAsync(c => c.Id == id);
         if (entry is null) return NotFound();
         _db.CheckIns.Remove(entry);
         await _db.SaveChangesAsync();

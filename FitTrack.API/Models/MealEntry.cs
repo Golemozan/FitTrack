@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace FitTrack.API.Models;
 
 public enum MealType
@@ -8,8 +9,11 @@ public enum MealType
     Snack
 }
 
-public class MealEntry
+public class MealEntry : IUserOwned
 {
+    [JsonIgnore]
+    public Guid UserId { get; set; }
+
     public Guid Id { get; set; }
     public string FoodName { get; set; } = string.Empty;
     public double Grams { get; set; }

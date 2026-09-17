@@ -106,12 +106,11 @@ if (-not (Test-Path (Join-Path $clientDir "node_modules"))) {
 # -- 4. Backend + Frontend baslat --
 Write-Host "`n[4/4] Uygulama baslatiliyor...`n" -ForegroundColor Gray
 Write-Host "  Backend  : http://localhost:5000" -ForegroundColor Green
-Write-Host "  Swagger  : http://localhost:5000/swagger" -ForegroundColor Green
 Write-Host "  Frontend : http://localhost:5173`n" -ForegroundColor Magenta
 
 # Backend — yeni pencere, exe'den calistir.
-# ASPNETCORE_ENVIRONMENT=Development sart: Production'da ApiKeyMiddleware anahtar yoksa
-# tum /api'yi 503'ler ve CORS hicbir origin'e izin vermez (ALLOWED_ORIGINS bos).
+# ASPNETCORE_ENVIRONMENT=Development sart: Production'da oturum cerezi Secure (__Host-) olur,
+# http://localhost uzerinden giris yapilamaz; User Secrets de okunmaz.
 # Calisma dizini publishDir olmali, yoksa appsettings.json cagiran cwd'den aranir.
 Start-Process powershell -WorkingDirectory $publishDir -ArgumentList @(
     "-NoExit",
