@@ -71,7 +71,7 @@ export default function CheckInSection() {
                           onClick={() => setVal(n)}
                           className={`flex flex-col items-center gap-0.5 rounded-xl border py-2 text-2xl transition-[background-color,border-color,opacity] ${
                             active
-                              ? "border-accent bg-accent/10"
+                              ? "border-accentfg bg-accent/10"
                               : "border-hair bg-card2 opacity-60 hover:opacity-100"
                           }`}
                         >
@@ -105,7 +105,7 @@ export default function CheckInSection() {
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="Not (opsiyonel) — ne hissediyorsun, ne yedin, nasıl geçti?"
-              className="w-full resize-none rounded-xl border border-hair bg-card2 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-accent"
+              className="w-full resize-none rounded-xl border border-hair bg-card2 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-accentfg"
             />
 
             <Button onClick={save} disabled={logCheckin.isPending} className="w-full py-2.5">

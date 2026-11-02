@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using FitTrack.API.Security;
 using FitTrack.Tests.Infrastructure;
 
 namespace FitTrack.Tests;
@@ -111,14 +112,85 @@ public class AuthTests : IClassFixture<TestApp>
         Assert.Equal(HttpStatusCode.Unauthorized, (await c.GetAsync("/api/goals")).StatusCode);
     }
 
+    private static HttpRequestMessage LoginFrom(string ip, string email, string password)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login") { Content = JsonContent.Create(new { email, password }) };
+        req.Headers.Add("X-Forwarded-For", ip);
+        return req;
+    }
+
+    /// <summary>
+    /// Beş hatadan sonra o kaynak (e-posta + IP) o hesap için susturulur — doğru parola bile geçmez ve
+    /// cevap yanlış parolayla aynıdır. Hesap sahibi başka bir yerden girebilir: saldırgan kurbanı kilitleyemez.
+    /// </summary>
     [Fact]
-    public async Task Account_locks_after_five_failures_even_for_correct_password()
+    public async Task Failed_logins_silence_the_source_not_the_account()
     {
         var (_, _, email, password) = await _app.RegisterAsync();
         var c = _app.Browser();
         for (var i = 0; i < 5; i++)
-            Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/api/auth/login", new { email, password = $"yanlis-{i}" })).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await c.PostAsJsonAsync("/api/auth/login", new { email, password })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await c.SendAsync(LoginFrom("198.51.100.7", email, $"yanlis-{i}"))).StatusCode);
+
+        var silenced = await c.SendAsync(LoginFrom("198.51.100.7", email, password));
+        Assert.Equal(HttpStatusCode.Unauthorized, silenced.StatusCode);
+        var unknown = await c.SendAsync(LoginFrom("198.51.100.8", "kimse-yok@example.com", "yanlis-parola-1"));
+        Assert.Equal(await unknown.Content.ReadAsStringAsync(), await silenced.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, (await _app.Browser().SendAsync(LoginFrom("203.0.113.9", email, password))).StatusCode);
+    }
+
+    /// <summary>
+    /// Çok adresten gelen dağıtık denemede hesap geneli eşik yeni cihazları durdurur; ama bu hesaba
+    /// daha önce girmiş cihaz (KnownDevice çerezi) girebilir — kilit sahibi dışarıda bırakmaz.
+    /// </summary>
+    [Fact]
+    public async Task Distributed_failures_lock_new_devices_but_not_known_ones()
+    {
+        var (owner, _, email, password) = await _app.RegisterAsync();
+        var attacker = _app.Browser();
+        for (var i = 0; i < 30; i++)
+            await attacker.SendAsync(LoginFrom($"198.51.100.{i + 20}", email, "yanlis-parola-x"));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _app.Browser().SendAsync(LoginFrom("203.0.113.50", email, password))).StatusCode);
+
+        await owner.PostAsync("/api/auth/logout", null); // oturum gitti, cihaz işareti kaldı
+        Assert.Equal(HttpStatusCode.OK, (await owner.SendAsync(LoginFrom("203.0.113.51", email, password))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_revokes_a_copied_cookie()
+    {
+        var (_, _, email, password) = await _app.RegisterAsync();
+        // Çerezi elle taşıyan iki istemci: biri "tarayıcı", öteki çalınmış kopya.
+        HttpClient Raw()
+        {
+            var raw = _app.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+                { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
+            raw.DefaultRequestHeaders.Add(CsrfHeaderMiddleware.HeaderName, CsrfHeaderMiddleware.HeaderValue);
+            return raw;
+        }
+        var login = await Raw().PostAsJsonAsync("/api/auth/login", new { email, password });
+        var cookie = login.Headers.GetValues("Set-Cookie").First(c => !c.Contains("Device")).Split(';')[0];
+        var browser = Raw();
+        var copy = Raw();
+        browser.DefaultRequestHeaders.Add("Cookie", cookie);
+        copy.DefaultRequestHeaders.Add("Cookie", cookie);
+        Assert.Equal(HttpStatusCode.OK, (await copy.GetAsync("/api/auth/me")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await browser.PostAsync("/api/auth/logout", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await copy.GetAsync("/api/auth/me")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("1234567890")]
+    [InlineData("password12")]
+    [InlineData("Passw0rd!!")]
+    [InlineData("qwertyuiop")]
+    [InlineData("Galatasaray1905")]
+    public async Task Common_passwords_are_rejected(string password)
+    {
+        var res = await _app.Browser().PostAsJsonAsync("/api/auth/register",
+            new { email = $"yaygin-{Guid.NewGuid():N}@example.com", password, displayName = "Y" });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
 
     [Fact]

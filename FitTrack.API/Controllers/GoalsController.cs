@@ -1,4 +1,5 @@
 using FitTrack.API.Data;
+using FitTrack.API.Security;
 using FitTrack.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,9 @@ public class GoalsController : ControllerBase
     {
         // Filtreli: yalnız oturumdaki kullanıcının hedefi. Yoksa ona özel varsayılan açılır.
         var goals = await _db.UserGoals.OrderBy(g => g.UpdatedAt).FirstOrDefaultAsync();
+        if (goals is not null) return goals;
+        using var _ = await UserLocks.AcquireAsync(CurrentUser.FromPrincipal(User), "goals");
+        goals = await _db.UserGoals.OrderBy(g => g.UpdatedAt).FirstOrDefaultAsync();
         if (goals is null)
         {
             goals = new UserGoals

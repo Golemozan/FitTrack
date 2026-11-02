@@ -176,7 +176,7 @@ public class OwnershipGuardTests : IDisposable
     public void Anonymous_context_cannot_write_or_read_owned_rows()
     {
         var (db, _) = Context();
-        db.MealEntries.Add(new MealEntry { Id = Guid.NewGuid(), FoodName = "x" });
+        db.MealEntries.Add(new MealEntry { Id = Guid.NewGuid(), LoggedAt = DateTime.Now, FoodName = "x" });
         Assert.Throws<UnauthorizedAccessException>(() => db.SaveChanges());
         Assert.Empty(db.MealEntries.ToList());
     }
@@ -187,12 +187,12 @@ public class OwnershipGuardTests : IDisposable
         var (db, user) = Context();
         var me = Guid.NewGuid();
         user.ActAs(me);
-        var mine = new MealEntry { Id = Guid.NewGuid(), FoodName = "mine" };
+        var mine = new MealEntry { Id = Guid.NewGuid(), LoggedAt = DateTime.Now, FoodName = "mine" };
         db.MealEntries.Add(mine);
         db.SaveChanges();
         Assert.Equal(me, mine.UserId);
 
-        db.MealEntries.Add(new MealEntry { Id = Guid.NewGuid(), FoodName = "theirs", UserId = Guid.NewGuid() });
+        db.MealEntries.Add(new MealEntry { Id = Guid.NewGuid(), LoggedAt = DateTime.Now, FoodName = "theirs", UserId = Guid.NewGuid() });
         Assert.Throws<UnauthorizedAccessException>(() => db.SaveChanges());
     }
 
@@ -203,13 +203,13 @@ public class OwnershipGuardTests : IDisposable
         var me = Guid.NewGuid();
         user.ActAs(me);
 
-        var foreign = new MealEntry { Id = Guid.NewGuid(), FoodName = "foreign", UserId = Guid.NewGuid() };
+        var foreign = new MealEntry { Id = Guid.NewGuid(), LoggedAt = DateTime.Now, FoodName = "foreign", UserId = Guid.NewGuid() };
         db.Attach(foreign);
         foreign.FoodName = "hacked";
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => db.SaveChangesAsync());
         db.ChangeTracker.Clear();
 
-        var mine = new MealEntry { Id = Guid.NewGuid(), FoodName = "mine" };
+        var mine = new MealEntry { Id = Guid.NewGuid(), LoggedAt = DateTime.Now, FoodName = "mine" };
         db.MealEntries.Add(mine);
         await db.SaveChangesAsync();
         mine.UserId = Guid.NewGuid(); // sahibini değiştirme denemesi
@@ -238,9 +238,9 @@ public class OwnershipGuardTests : IDisposable
         db.ChangeTracker.Clear();
 
         // Aynı SaveChanges içinde eklenen kendi seansı + hareketi + seti geçerli
-        var s = new WorkoutSession { Id = Guid.NewGuid(), Name = "push" };
+        var s = new WorkoutSession { Id = Guid.NewGuid(), Name = "push", LoggedAt = DateTime.Now };
         var e = new Exercise { Id = Guid.NewGuid(), WorkoutSessionId = s.Id, Name = "bench" };
-        var set = new ExerciseSet { Id = Guid.NewGuid(), ExerciseId = e.Id, Reps = 5 };
+        var set = new ExerciseSet { Id = Guid.NewGuid(), ExerciseId = e.Id, SetNumber = 1, Reps = 5 };
         db.AddRange(s, e, set);
         db.SaveChanges();
         Assert.Single(db.ExerciseSets.ToList());

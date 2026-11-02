@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { keepPreviousData, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { keepPreviousData, MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import ToastContainer from "./components/Toast";
@@ -10,6 +10,14 @@ import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient({
+  // Herhangi bir kayıt başarıyla değişince başarımlar yeniden hesaplansın — yeni kademe anında kutlanır.
+  // Her bileşene tek tek eklemek yerine tek kural; "görüldü" isteği kendini tetiklemesin diye hariç.
+  mutationCache: new MutationCache({
+    onSuccess: (_data, _vars, _ctx, mutation) => {
+      if (mutation.options.mutationKey?.[0] !== "achievements")
+        void queryClient.invalidateQueries({ queryKey: ["achievements"] });
+    },
+  }),
   defaultOptions: {
     queries: {
       retry: 0, // fail fast — no long hang when the API is unreachable

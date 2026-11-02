@@ -30,7 +30,7 @@ export default function MacroRing({ consumed, goal }: { consumed: number; goal: 
             cornerRadius={9}
             paddingAngle={0}
           >
-            <Cell fill={over ? "var(--color-danger)" : "var(--color-accent)"} />
+            <Cell fill={over ? "var(--color-danger)" : "var(--color-move)"} />
             <Cell fill="var(--color-paper-3)" />
           </Pie>
         </PieChart>

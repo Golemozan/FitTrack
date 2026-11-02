@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Dumbbell, MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, CheckCheck, Dumbbell, MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   useAddSet,
+  useCompleteSession,
   useCreateSession,
   useDeleteExercise,
   useDeleteSet,
@@ -13,6 +15,7 @@ import {
 } from "../hooks/useWorkout";
 import { useToast } from "../hooks/useToast";
 import AddExerciseSheet from "../components/AddExerciseSheet";
+import { useRestTimer } from "../components/RestTimer";
 import { Card, Chip, EmptyState, IconButton, ListSkeleton, SectionTitle } from "../components/ui";
 import { SectionHeader } from "../components/SectionHeader";
 import type { Exercise, ExerciseSet } from "../types";
@@ -22,7 +25,7 @@ import type { Exercise, ExerciseSet } from "../types";
  * exactly over the fields they describe. The last track is `auto` — the action
  * column holds two 36px buttons and must not be squeezed into a fixed 2rem.
  */
-const SET_GRID = "grid grid-cols-[1.75rem_1fr_1fr_auto] items-center gap-2";
+const SET_GRID = "grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2";
 
 export default function WorkoutSection() {
   const today = useTodaySession();
@@ -81,12 +84,13 @@ export default function WorkoutSection() {
               </EmptyState>
             </Card>
           ) : (
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
               {session.exercises.map((ex) => (
                 <ExerciseCard key={ex.id} exercise={ex} sessionId={session.id} />
               ))}
             </div>
           )}
+          {session && session.exercises.length > 0 && <SaveDayBar sessionId={session.id} exercises={session.exercises} />}
         </div>
 
         <aside className="lg:col-span-1">
@@ -123,6 +127,51 @@ export default function WorkoutSection() {
         <AddExerciseSheet open={sheetOpen} sessionId={session.id} onClose={() => setSheetOpen(false)} />
       )}
     </section>
+  );
+}
+
+/**
+ * Yüklenen antrenman setleri işaretsiz gelir; kiloları düzelttikten sonra her seti tek tek
+ * tiklemek yerine tek dokunuş. Tekrarı 0 olan set (boş satır) tamamlanmış sayılmaz.
+ */
+function SaveDayBar({ sessionId, exercises }: { sessionId: string; exercises: Exercise[] }) {
+  const complete = useCompleteSession();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const sets = exercises.flatMap((e) => e.sets).filter((s) => s.reps > 0);
+  const done = sets.filter((s) => s.isCompleted).length;
+  const allDone = sets.length > 0 && done === sets.length;
+
+  if (sets.length === 0) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hair bg-panel p-3 pl-4 shadow-card">
+      <div className="min-w-0">
+        <p className="text-sm font-bold">{allDone ? "Bugüne kaydedildi" : "Bugünün antrenmanı"}</p>
+        <p className="text-xs text-neutral-500">{done}/{sets.length} set tamamlandı</p>
+      </div>
+      {allDone ? (
+        <span className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent/15 px-4 text-sm font-semibold text-accentfg">
+          <CheckCheck size={16} /> Kaydedildi
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={complete.isPending}
+          onClick={async () => {
+            // Kilo alanından doğrudan buraya dokunulursa alanın blur kaydı (isCompleted: false) hâlâ
+            // yoldadır; tamamlamadan sonra varırsa o seti geri açar. Önce bekleyen kayıtlar bitsin.
+            while (qc.isMutating() > 0) await new Promise((r) => setTimeout(r, 50));
+            complete.mutate(sessionId, {
+              onSuccess: () => toast.success("Antrenman bugüne kaydedildi"),
+              onError: () => toast.error("Kaydedilemedi"),
+            });
+          }}
+          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-accent px-5 text-sm font-semibold text-accentink transition-[filter] hover:brightness-95 disabled:opacity-50"
+        >
+          <CheckCheck size={16} /> Güne kaydet
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -186,7 +235,7 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveName()}
               autoFocus
-              className="h-10 min-w-0 flex-1 rounded-xl border border-hair/70 bg-card2 px-3 text-sm font-semibold text-neutral-100 outline-none transition-colors focus:border-accent/70"
+              className="h-10 min-w-0 flex-1 rounded-xl border border-hair/70 bg-card2 px-3 text-sm font-semibold text-neutral-100 outline-none transition-colors focus:border-accentfg/70"
             />
             <IconButton icon={Check} tone="accent" size={15} onClick={saveName} aria-label="Kaydet" />
             <IconButton
@@ -269,7 +318,7 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
       <button
         onClick={addNext}
         disabled={addSet.isPending}
-        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-accentfg transition-colors hover:bg-accent/10 disabled:opacity-40"
       >
         <Plus size={15} /> Set Ekle
       </button>
@@ -280,6 +329,7 @@ function ExerciseCard({ exercise, sessionId }: { exercise: Exercise; sessionId: 
 function SetRow({ set, ghost }: { set: ExerciseSet; ghost?: ExerciseSet }) {
   const updateSet = useUpdateSet();
   const deleteSet = useDeleteSet();
+  const timer = useRestTimer();
   const [weight, setWeight] = useState(set.weightKg ? String(set.weightKg) : "");
   const [reps, setReps] = useState(set.reps ? String(set.reps) : "");
 
@@ -292,7 +342,7 @@ function SetRow({ set, ghost }: { set: ExerciseSet; ghost?: ExerciseSet }) {
   // Height, not vertical padding — keeps the field exactly as tall as the 36px
   // buttons beside it so the row reads as one aligned band.
   const inputCls =
-    "h-10 w-full rounded-xl border border-hair/70 bg-card2 text-center text-sm tabular-nums text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel";
+    "h-10 w-full rounded-xl border border-hair/70 bg-card2 text-center text-sm tabular-nums text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accentfg/70 focus:bg-panel";
 
   return (
     <div className={`${SET_GRID} ${set.isCompleted ? "opacity-70" : ""}`}>
@@ -322,7 +372,13 @@ function SetRow({ set, ghost }: { set: ExerciseSet; ghost?: ExerciseSet }) {
           icon={Check}
           size={15}
           tone={set.isCompleted ? "active" : "default"}
-          onClick={() => commit(!set.isCompleted)}
+          onClick={() => {
+            const completing = !set.isCompleted;
+            commit(completing);
+            // Set bitti → dinlenme başlar; işaret geri alındıysa sayaç da kapanır.
+            if (completing) timer.start();
+            else timer.stop();
+          }}
           aria-label={set.isCompleted ? "Tamamlandı işaretini kaldır" : "Tamamlandı işaretle"}
         />
         <IconButton

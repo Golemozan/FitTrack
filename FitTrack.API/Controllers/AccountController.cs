@@ -120,7 +120,7 @@ public class AccountController : ControllerBase
 
     /// <summary>Hesabı ve ona ait her satırı kalıcı olarak siler. Parola yeniden istenir.</summary>
     [HttpPost("delete")]
-    [EnableRateLimiting(RateLimits.Sensitive)]
+    [EnableRateLimiting(RateLimits.Destructive)]
     public async Task<IActionResult> DeleteAccount(PasswordConfirmRequest req, CancellationToken ct)
     {
         var user = await LoadUserAsync(ct);

@@ -1,4 +1,5 @@
 using FitTrack.API.Data;
+using FitTrack.API.Security;
 using FitTrack.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,9 @@ public class ProfileController : ControllerBase
     private async Task<Profile> GetOrCreate()
     {
         var profile = await _db.Profiles.FirstOrDefaultAsync();
+        if (profile is not null) return profile;
+        using var _ = await UserLocks.AcquireAsync(CurrentUser.FromPrincipal(User), "profile");
+        profile = await _db.Profiles.FirstOrDefaultAsync();
         if (profile is null)
         {
             profile = new Profile

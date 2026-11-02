@@ -21,7 +21,7 @@ export function SectionHeader({
   return (
     <div className={`flex flex-wrap items-center justify-between gap-4 border-b border-hair/70 pb-5 pr-12 ${className}`}>
       <h2 className="flex min-w-0 items-center gap-3 text-2xl font-bold leading-tight text-neutral-100 sm:text-3xl">
-        <Icon size={22} strokeWidth={2.1} className="shrink-0 text-accent" />
+        <Icon size={22} strokeWidth={2.1} className="shrink-0 text-accentfg" />
         {title}
       </h2>
       {action && (

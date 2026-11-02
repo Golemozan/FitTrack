@@ -5,6 +5,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ["var(--font-body)"],
+        display: ["var(--font-display)"],
         cond: ["var(--font-display)"],
         mono: ["var(--font-outlier)"],
       },
@@ -25,6 +26,7 @@ export default {
         accent: "oklch(var(--accent-channels) / <alpha-value>)",
         accent2: "oklch(var(--accent-channels) / <alpha-value>)",
         accentink: "oklch(var(--accent-ink-channels) / <alpha-value>)",
+        accentfg: "oklch(var(--accent-fg-channels) / <alpha-value>)",
         pro: "oklch(var(--protein-channels) / <alpha-value>)",
         carb: "oklch(var(--carb-channels) / <alpha-value>)",
         fat: "oklch(var(--fat-channels) / <alpha-value>)",
@@ -32,8 +34,16 @@ export default {
         lift: "oklch(var(--lift-channels) / <alpha-value>)",
         flow: "oklch(var(--flow-channels) / <alpha-value>)",
         lav: "oklch(var(--lav-channels) / <alpha-value>)",
-        track: "oklch(23% 0.010 264 / <alpha-value>)",
+        sun: "oklch(var(--sun-channels) / <alpha-value>)",
+        navy: "oklch(var(--navy-channels) / <alpha-value>)",
+        snow: "oklch(var(--snow-channels) / <alpha-value>)",
+        pill: "oklch(var(--pill-channels) / <alpha-value>)",
+        pillink: "oklch(var(--pill-ink-channels) / <alpha-value>)",
+        track: "oklch(var(--track-channels) / <alpha-value>)",
         loss: "oklch(var(--success-channels) / <alpha-value>)",
+        // Anlamlı adlar: yeni kod danger/success kullanır (gain/loss eski adlar, aynı renk).
+        danger: "oklch(var(--danger-channels) / <alpha-value>)",
+        success: "oklch(var(--success-channels) / <alpha-value>)",
         gain: "oklch(var(--danger-channels) / <alpha-value>)",
         neutral: {
           100: "oklch(var(--ink-channels) / <alpha-value>)",
@@ -47,6 +57,8 @@ export default {
       boxShadow: {
         glow: "var(--shadow-card)",
         glowv: "var(--shadow-card)",
+        card: "var(--shadow-card)",
+        float: "var(--shadow-float)",
       },
     },
   },

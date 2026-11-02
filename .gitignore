@@ -20,3 +20,6 @@ backups/
 
 # hallmark skill calisma durumu — arac ici log, uygulama kaynagi degil
 .hallmark/
+
+# yerel demo hesabi betigi — icinde test parolasi var, public repoya girmez
+scripts/seed-demo.mjs

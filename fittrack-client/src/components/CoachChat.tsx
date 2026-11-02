@@ -163,7 +163,7 @@ export default function CoachChat({ onKeyProblem }: { onKeyProblem?: () => void 
         className="mt-3 flex flex-wrap items-end gap-2 border-t border-hair pt-3"
       >
         {editingIdx !== null && (
-          <span className="flex w-full items-center gap-1 rounded-lg bg-accent/10 px-2 py-1 text-xs text-accent">
+          <span className="flex w-full items-center gap-1 rounded-lg bg-accent/10 px-2 py-1 text-xs text-accentfg">
             <Pencil size={11} /> düzenleniyor
             <button type="button" onClick={cancelEdit} className="ml-auto flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent/10">
               <X size={12} />
@@ -184,7 +184,7 @@ export default function CoachChat({ onKeyProblem }: { onKeyProblem?: () => void 
           }}
           rows={1}
           placeholder={editingIdx !== null ? "Mesajı düzelt..." : "Nasıl hissediyorsun?"}
-          className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:bg-panel"
+          className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-[var(--radius-input)] border border-hair bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-accentfg focus:bg-panel"
         />
         {chat.isPending ? (
           <button
@@ -234,7 +234,7 @@ function Bubble({
         <div
           className={`whitespace-pre-wrap rounded-[var(--radius-card)] px-3.5 py-2.5 text-sm leading-relaxed ${
             isEditing
-              ? "ring-2 ring-accent"
+              ? "ring-2 ring-accentfg"
               : isUser
                 ? "bg-accent text-white"
                 : "bg-card2 text-neutral-100"

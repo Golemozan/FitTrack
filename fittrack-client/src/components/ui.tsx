@@ -9,8 +9,8 @@ import type { LucideIcon } from "lucide-react";
 /* ────────────────────────────────────────────────────────────────
    Design tokens
 
-   FitTrack is permanently dark (see ThemeContext) — no `dark:`
-   variants anywhere below. Three rules hold the screens together:
+   İki tema (açık varsayılan, koyu isteğe bağlı) aynı sınıfları kullanır; `dark:` varyantı
+   yoktur, temayı tokens.css'teki kanal değerleri değiştirir. Üç kural ekranları bir arada tutar:
 
    1. Radius is semantic: input < card < panel; circles only for circular data.
    2. One tokenized hairline, one field look. Nothing redefines them locally.
@@ -24,7 +24,7 @@ export const HAIRLINE = "border-hair/70";
 
 /** One definition of what a text/number field looks like. */
 export const fieldCls =
-  "min-h-11 w-full rounded-[var(--radius-input)] border border-hair/70 bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-[border-color,background-color] duration-150 placeholder:text-neutral-500 focus:border-accent focus:bg-panel disabled:cursor-not-allowed disabled:opacity-45";
+  "min-h-11 w-full rounded-[var(--radius-input)] border border-hair/70 bg-card2 px-3.5 py-2.5 text-sm text-neutral-100 outline-none transition-[border-color,background-color] duration-150 placeholder:text-neutral-500 focus:border-accentfg focus:bg-panel disabled:cursor-not-allowed disabled:opacity-45";
 
 // Retained for source compatibility: the palette is mono-accent, so every
 // chromatic name resolves to the same brand colour.
@@ -58,7 +58,7 @@ export function Card({
 
 export function SectionTitle({ children, accent = "neutral" }: { children: ReactNode; accent?: Accent }) {
   return (
-    <h2 className={`mb-3 text-sm font-semibold ${accent === "neutral" ? "text-neutral-300" : "text-accent"}`}>
+    <h2 className={`mb-3 text-sm font-semibold ${accent === "neutral" ? "text-neutral-300" : "text-accentfg"}`}>
       {children}
     </h2>
   );
@@ -68,15 +68,17 @@ export function SectionTitle({ children, accent = "neutral" }: { children: React
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   accent?: Accent;
-  variant?: "solid" | "soft" | "ghost";
+  /** solid = limon birincil eylem (ekranda bir tane) · dark = lacivert güçlü ikincil · soft/ghost = sessiz */
+  variant?: "solid" | "dark" | "soft" | "ghost";
 }
 
 export function Button({ variant = "solid", className = "", ...props }: ButtonProps) {
   const base =
-    "min-h-10 whitespace-nowrap rounded-[var(--radius-input)] px-4 py-2.5 text-sm font-semibold transition-[background-color,color,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
+    "min-h-11 whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-[background-color,color,transform,filter] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
   const styles: Record<NonNullable<ButtonProps["variant"]>, string> = {
-    solid: "bg-accent text-accentink hover:brightness-110",
-    soft: "border border-hair/70 bg-card2 text-neutral-100 hover:bg-panel",
+    solid: "bg-accent text-accentink hover:brightness-[1.04]",
+    dark: "bg-navy text-snow hover:brightness-125",
+    soft: "border border-hair bg-card2 text-neutral-100 hover:bg-panel",
     ghost: "text-neutral-300 hover:bg-card2",
   };
   return <button className={`${base} ${styles[variant]} ${className}`} {...props} />;
@@ -86,7 +88,7 @@ type IconTone = "default" | "accent" | "danger" | "active";
 
 const iconTone: Record<IconTone, string> = {
   default: "border border-transparent text-neutral-400 hover:border-hair hover:bg-card2 hover:text-neutral-100",
-  accent: "bg-accent/12 text-accent hover:bg-accent/20",
+  accent: "bg-accent/10 text-accentfg hover:bg-accent/20",
   danger: "text-neutral-500 hover:bg-gain/10 hover:text-gain",
   active: "bg-accent text-accentink",
 };
@@ -134,7 +136,7 @@ export function Segmented<T extends string | number>({
 }) {
   const pad = size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm";
   return (
-    <div className="inline-flex max-w-full gap-1 rounded-xl bg-card2 p-1">
+    <div className="inline-flex max-w-full gap-1 rounded-full bg-card2 p-1">
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
@@ -143,8 +145,8 @@ export function Segmented<T extends string | number>({
             key={String(o.value)}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors ${pad} ${
-              active ? "bg-panel text-neutral-100" : "text-neutral-400 hover:text-neutral-100"
+            className={`flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-colors ${pad} ${
+              active ? "bg-panel text-neutral-100 shadow-card" : "text-neutral-400 hover:text-neutral-100"
             }`}
           >
             {Icon && <Icon size={14} />}
@@ -160,10 +162,10 @@ type ChipTone = "neutral" | "accent" | "pro" | "carb" | "fat";
 
 const chipTone: Record<ChipTone, string> = {
   neutral: "border border-hair bg-card2 text-neutral-300",
-  accent: "bg-accent/12 text-accent",
-  pro: "bg-pro/12 text-pro",
-  carb: "bg-carb/12 text-carb",
-  fat: "bg-fat/12 text-fat",
+  accent: "bg-accent/10 text-accentfg",
+  pro: "bg-pro/10 text-pro",
+  carb: "bg-carb/10 text-carb",
+  fat: "bg-fat/10 text-fat",
 };
 
 /** Small pill label. Soft fill by design — a chip never shouts. */
@@ -230,7 +232,7 @@ export function Stat({
   return (
     <Card className="flex min-w-0 flex-col gap-1">
       <span className="text-xs font-medium text-neutral-400">{label}</span>
-      <span className={`num text-2xl ${accent === "neutral" ? "text-neutral-100" : "text-accent"}`}>{value}</span>
+      <span className={`num text-2xl ${accent === "neutral" ? "text-neutral-100" : "text-accentfg"}`}>{value}</span>
       {sub != null && <span className="text-xs text-neutral-400">{sub}</span>}
     </Card>
   );
@@ -255,7 +257,7 @@ export function ProgressBar({
 
 export function Spinner() {
   return (
-    <div className="flex justify-center py-8 text-accent">
+    <div className="flex justify-center py-8 text-accentfg">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
     </div>
   );

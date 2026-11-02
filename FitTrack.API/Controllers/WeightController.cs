@@ -20,6 +20,7 @@ public class WeightController : ControllerBase
     public async Task<ActionResult<WeightLog>> Log(LogWeightRequest req)
     {
         var targetDay = (req.LoggedAt ?? DateTime.Now).Date;
+        if (!DataRules.InWindow(targetDay)) return BadRequest(new { error = "Tarih geçersiz: gelecek ya da çok eski bir gün olamaz." });
         var existing = await _db.WeightLogs
             .FirstOrDefaultAsync(w => w.LoggedAt >= targetDay && w.LoggedAt < targetDay.AddDays(1));
 
@@ -61,7 +62,7 @@ public class WeightController : ControllerBase
     [HttpGet("history")]
     public async Task<ActionResult<List<WeightPoint>>> History([FromQuery] int days = 30)
     {
-        if (days <= 0) days = 30;
+        days = days <= 0 ? 30 : Math.Min(days, DataRules.MaxDaysBack);
         var since = DateTime.Now.Date.AddDays(-days + 1);
         return await _db.WeightLogs
             .Where(w => w.LoggedAt >= since)
@@ -101,7 +102,7 @@ public class WeightController : ControllerBase
     [HttpGet("logs")]
     public async Task<ActionResult<List<WeightLog>>> Logs([FromQuery] int take = 10)
     {
-        if (take <= 0) take = 10;
+        take = take <= 0 ? 10 : Math.Min(take, 200);
         return await _db.WeightLogs
             .OrderByDescending(w => w.LoggedAt)
             .Take(take)

@@ -135,7 +135,7 @@ function ProfileCard() {
           </div>
           <div>
             <div className="text-xs font-medium text-neutral-400">Hedefe kalan</div>
-            <div className={`num text-2xl ${toTarget != null && toTarget > 0 ? "text-accent" : "text-loss"}`}>
+            <div className={`num text-2xl ${toTarget != null && toTarget > 0 ? "text-accentfg" : "text-loss"}`}>
               {toTarget != null ? `${toTarget > 0 ? "" : "+"}${Math.abs(toTarget).toFixed(1)}` : "—"}
               {toTarget != null && <span className="ml-1 text-sm text-neutral-400">kg</span>}
             </div>

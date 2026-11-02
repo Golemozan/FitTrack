@@ -159,10 +159,16 @@ public class NoEncryptionKeyTests : IClassFixture<NoEncryptionKeyApp>
         var client = _app.Browser();
         var resp = await client.PostAsJsonAsync("/api/auth/register",
             new { email = $"p-{Guid.NewGuid():N}@test.com", password = "prod-parola-123", displayName = "P" });
-        var cookie = resp.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("__Host-FitTrack"));
+        var cookie = resp.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("__Host-FitTrack="));
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("domain=", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.True(resp.Headers.Contains("Strict-Transport-Security"));
+
+        // Tanınan cihaz işareti de aynı korumalarla gider.
+        var device = resp.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("__Host-FitTrack-Device="));
+        Assert.Contains("secure", device, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", device, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", device, StringComparison.OrdinalIgnoreCase);
     }
 }

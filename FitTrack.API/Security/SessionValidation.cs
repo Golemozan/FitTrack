@@ -13,11 +13,14 @@ namespace FitTrack.API.Security;
 public static class SessionValidation
 {
     public const string VersionClaim = "fittrack:sv";
+    /// <summary>Oturum kimliği: çıkışta <see cref="Models.RevokedSession"/>'a yazılır.</summary>
+    public const string SessionClaim = "fittrack:sid";
 
     public static async Task ValidateAsync(CookieValidatePrincipalContext ctx)
     {
         var userId = CurrentUser.FromPrincipal(ctx.Principal);
         var versionClaim = ctx.Principal?.FindFirst(VersionClaim)?.Value;
+        var sid = ctx.Principal?.FindFirst(SessionClaim)?.Value;
 
         var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
         var version = userId is null
@@ -27,7 +30,11 @@ public static class SessionValidation
                 .Select(u => (int?)u.SessionVersion)
                 .FirstOrDefaultAsync(ctx.HttpContext.RequestAborted);
 
-        if (version is null || versionClaim != version.Value.ToString())
+        // Oturum kimliği olmayan çerez bu sürümden eskidir ve çıkışla iptal edilemez: bir kez yeniden giriş.
+        var revoked = sid is null || await db.RevokedSessions.AsNoTracking()
+            .AnyAsync(r => r.Sid == sid, ctx.HttpContext.RequestAborted);
+
+        if (version is null || versionClaim != version.Value.ToString() || revoked)
         {
             ctx.RejectPrincipal();
             await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -40,6 +47,8 @@ public static class RateLimits
     public const string Auth = "auth";
     public const string Coach = "coach";
     public const string Sensitive = "sensitive";
+    /// <summary>Hesap silme: parola değiştirmeyle aynı kovayı paylaşmasın, biri ötekini kilitlemesin.</summary>
+    public const string Destructive = "destructive";
     /// <summary>Eski parola tahmini: kullanıcı ya da IP başına değil, küresel sınır — çok hesap açmak işe yaramasın.</summary>
     public const string Legacy = "legacy";
 }

@@ -100,7 +100,7 @@ export default function AddExerciseSheet({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Hareket ara — örn. chest press"
-              className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel"
+              className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accentfg/70 focus:bg-panel"
             />
           </div>
 
@@ -114,7 +114,7 @@ export default function AddExerciseSheet({
                     onClick={() => setFilter(t)}
                     className={`flex h-9 items-center rounded-full px-3.5 text-xs font-medium transition-colors ${
                       active
-                        ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/40"
+                        ? "bg-accent/15 text-accentfg ring-1 ring-inset ring-accentfg/40"
                         : "bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-neutral-200"
                     }`}
                   >

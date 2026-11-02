@@ -374,7 +374,7 @@ function AddRowButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10"
+      className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-accentfg transition-colors hover:bg-accent/10"
     >
       <Plus size={15} /> Ekle
     </button>

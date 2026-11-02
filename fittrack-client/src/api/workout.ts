@@ -20,6 +20,9 @@ export const workoutApi = {
   renameSession: (id: string, body: CreateSessionRequest) =>
     api.put<WorkoutSession>(`/workout/session/${id}`, body).then((r) => r.data),
 
+  completeSession: (id: string) =>
+    api.post<WorkoutSession>(`/workout/session/${id}/complete`).then((r) => r.data),
+
   deleteSession: (id: string) =>
     api.delete(`/workout/session/${id}`).then((r) => r.data),
 

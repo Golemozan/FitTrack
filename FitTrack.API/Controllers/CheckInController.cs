@@ -35,7 +35,7 @@ public class CheckInController : ControllerBase
     [HttpGet("recent")]
     public async Task<ActionResult<List<CheckIn>>> Recent([FromQuery] int take = 20)
     {
-        if (take <= 0) take = 20;
+        take = take <= 0 ? 20 : Math.Min(take, 200);
         return await _db.CheckIns
             .OrderByDescending(c => c.LoggedAt)
             .Take(take)

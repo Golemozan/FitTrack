@@ -36,7 +36,8 @@ public class NutritionController : ControllerBase
         };
         _db.MealEntries.Add(entry);
         await _db.SaveChangesAsync();
-        return CreatedAtAction(nameof(Today), null, entry);
+        // Göreli Location: mutlak adres Host başlığından kurulur, sahte Host yansımasın.
+        return Created("/api/nutrition/today", entry);
     }
 
     // PUT /api/nutrition/log/{id}  → edit an existing entry (food, grams, macros, meal)
@@ -80,6 +81,7 @@ public class NutritionController : ControllerBase
     public async Task<ActionResult<NutritionSummary>> Summary([FromQuery] DateTime? date)
     {
         var day = (date ?? DateTime.Now).Date;
+        if (!DataRules.InWindow(day)) return BadRequest(new { error = "Tarih geçersiz." });
         var entries = await _db.MealEntries
             .Where(m => m.LoggedAt >= day && m.LoggedAt < day.AddDays(1))
             .ToListAsync();
@@ -127,6 +129,7 @@ public class NutritionController : ControllerBase
     [HttpGet("history")]
     public async Task<ActionResult<List<DailyNutritionSummary>>> History([FromQuery] int days = 30)
     {
+        days = Math.Clamp(days, 1, DataRules.MaxDaysBack);
         var since = DateTime.Now.Date.AddDays(-days + 1);
         var entries = await _db.MealEntries
             .Where(m => m.LoggedAt >= since)

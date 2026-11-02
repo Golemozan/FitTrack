@@ -1,32 +1,107 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Performance Dashboard · theme: technical-athletic dark · enrichment: tier A · nav: app rail · footer: none */
+/* FitTrack tasarım tokenları — iki tema (2026-11-01 yeniden tasarım).
+ *
+ * Varsayılan açık: yumuşak lavanta-gri zemin, beyaz kartlar, vurgu için koyu lacivert kart.
+ * Koyu tema <html data-theme="dark"> ile gelir (Profil → Koyu tema). Bileşenler aynı sınıfları
+ * kullanır; temayı yalnız buradaki kanal değerleri değiştirir.
+ *
+ * Renk görevleri — her renk tek bir şeyin sahibidir:
+ *   accent (limon)   → ekranın birincil eylemi, tamamlanan gün/görev (✓)
+ *   move   (mercan)  → beslenme, kalori
+ *   lift   (menekşe) → antrenman
+ *   flow   (gök)     → kilo
+ *   lav    (pembe)   → durum / ruh hali
+ *   sun    (güneş)   → "idare eder" ara durum
+ *   danger / success → yalnız durum bildirimi, dekor değil
+ * Renkli dolgunun üstündeki metin hep sabit lacivert (`text-navy`) — açık temada da koyu temada da
+ * okunur. Renk metne değil yüzeye verilir; açık renk (limon, güneş) metin rengi olarak kullanılmaz.
+ */
 :root {
-  --paper-channels: 13% 0.008 264;
-  --paper-2-channels: 18% 0.006 260;
-  --paper-3-channels: 23% 0.007 260;
-  --ink-channels: 97% 0.003 260;
-  --ink-2-channels: 82% 0.006 260;
-  --rule-channels: 30% 0.007 260;
-  --rule-2-channels: 39% 0.008 260;
-  --muted-channels: 59% 0.009 260;
-  --neutral-channels: 70% 0.008 260;
-  --accent-channels: 67% 0.19 251;
-  --accent-soft-channels: 25% 0.065 251;
-  --accent-ink-channels: 99% 0 0;
-  --focus-channels: 73% 0.17 251;
-  --success-channels: 72% 0.17 148;
-  --danger-channels: 66% 0.22 28;
-  --protein-channels: 72% 0.15 145;
-  --carb-channels: 72% 0.14 72;
-  --fat-channels: 72% 0.14 315;
+  color-scheme: light;
 
-  /* Alan aksanlari — Apple Fitness registeri. Her aksan KENDI yuzeyine sahiptir:
-     move = kalori/hareket, lift = antrenman, flow = kilo/ilerleme, lav = check-in.
-     Aksanlar birbirine gradyanla baglanmaz; kart zemini hep panel kalir. */
-  --move-channels: 68% 0.20 18;
-  --lift-channels: 82% 0.19 130;
-  --flow-channels: 80% 0.14 200;
-  --lav-channels: 74% 0.14 300;
+  --paper-channels: 96.6% 0.007 286;     /* sayfa zemini */
+  --paper-2-channels: 100% 0 0;          /* kart */
+  --paper-3-channels: 94.8% 0.008 286;   /* gömülü yüzey, alan zemini */
+  --ink-channels: 22% 0.032 282;         /* ana metin — lacivert-siyah */
+  --ink-2-channels: 36% 0.026 282;
+  --rule-channels: 90.5% 0.009 286;
+  --rule-2-channels: 84% 0.011 286;
+  --muted-channels: 56% 0.018 282;
+  --neutral-channels: 46% 0.02 282;
 
+  --accent-channels: 90% 0.21 124;       /* limon */
+  --accent-soft-channels: 95% 0.09 124;
+  --accent-ink-channels: 22% 0.032 282;
+  --accent-fg-channels: 50% 0.14 130;    /* vurgu METİN/çizgi olarak: limon beyazda okunmaz */
+  --focus-channels: 55% 0.2 285;
+
+  --success-channels: 62% 0.16 150;
+  --danger-channels: 62% 0.2 30;
+  --protein-channels: 66% 0.16 150;
+  --carb-channels: 76% 0.15 75;
+  --fat-channels: 62% 0.17 300;
+
+  --move-channels: 70% 0.17 38;          /* mercan */
+  --lift-channels: 60% 0.2 285;          /* menekşe */
+  --flow-channels: 76% 0.11 225;         /* gök */
+  --lav-channels: 82% 0.1 350;           /* pembe */
+  --sun-channels: 86% 0.14 85;           /* güneş */
+
+  --navy-channels: 22% 0.032 282;        /* tema değişse de sabit koyu */
+  --snow-channels: 99% 0.003 286;        /* tema değişse de sabit açık */
+  --track-channels: 92% 0.01 286;
+  --pill-channels: 22% 0.032 282;        /* alt menüde seçili sekme: açıkta lacivert */
+  --pill-ink-channels: 99% 0.003 286;
+
+  --shadow-card: 0 1px 2px oklch(22% 0.03 282 / 0.04), 0 10px 28px -16px oklch(22% 0.03 282 / 0.18);
+  --shadow-overlay: 0 24px 64px oklch(22% 0.03 282 / 0.22);
+  --shadow-float: 0 12px 32px -8px oklch(22% 0.03 282 / 0.28);
+  --scrim: oklch(22% 0.03 282 / 0.42);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper-channels: 15% 0.018 282;
+  --paper-2-channels: 20% 0.02 282;
+  --paper-3-channels: 25% 0.022 282;
+  --ink-channels: 97% 0.004 286;
+  --ink-2-channels: 84% 0.01 286;
+  --rule-channels: 29% 0.02 282;
+  --rule-2-channels: 37% 0.022 282;
+  --muted-channels: 64% 0.018 286;
+  --neutral-channels: 74% 0.015 286;
+
+  --accent-channels: 90% 0.21 124;
+  --accent-soft-channels: 32% 0.08 124;
+  --accent-ink-channels: 22% 0.032 282;
+  --accent-fg-channels: 90% 0.21 124;
+  --focus-channels: 78% 0.15 285;
+
+  --success-channels: 72% 0.16 150;
+  --danger-channels: 70% 0.18 30;
+  --protein-channels: 74% 0.16 150;
+  --carb-channels: 80% 0.14 75;
+  --fat-channels: 72% 0.15 300;
+
+  --move-channels: 72% 0.17 38;
+  --lift-channels: 66% 0.19 285;
+  --flow-channels: 78% 0.11 225;
+  --lav-channels: 82% 0.1 350;
+  --sun-channels: 86% 0.14 85;
+
+  /* Koyu temada "vurgu kartı" zeminden bir kademe yükselir, çerçeveyle ayrılır. */
+  --navy-channels: 27% 0.04 282;
+  --track-channels: 30% 0.022 282;
+  --pill-channels: 90% 0.21 124;          /* koyuda limon */
+  --pill-ink-channels: 22% 0.032 282;
+
+  --shadow-card: 0 0 0 1px oklch(100% 0 0 / 0.02);
+  --shadow-overlay: 0 24px 80px oklch(0% 0 0 / 0.6);
+  --shadow-float: 0 12px 32px -8px oklch(0% 0 0 / 0.6);
+  --scrim: oklch(10% 0.02 282 / 0.7);
+}
+
+:root {
   --color-paper: oklch(var(--paper-channels));
   --color-paper-2: oklch(var(--paper-2-channels));
   --color-paper-3: oklch(var(--paper-3-channels));
@@ -39,6 +114,7 @@
   --color-accent: oklch(var(--accent-channels));
   --color-accent-soft: oklch(var(--accent-soft-channels));
   --color-accent-ink: oklch(var(--accent-ink-channels));
+  --color-accent-fg: oklch(var(--accent-fg-channels));
   --color-focus: oklch(var(--focus-channels));
   --color-success: oklch(var(--success-channels));
   --color-danger: oklch(var(--danger-channels));
@@ -49,31 +125,31 @@
   --color-lift: oklch(var(--lift-channels));
   --color-flow: oklch(var(--flow-channels));
   --color-lav: oklch(var(--lav-channels));
-  --color-track: oklch(23% 0.010 264);
+  --color-sun: oklch(var(--sun-channels));
+  --color-navy: oklch(var(--navy-channels));
+  --color-track: oklch(var(--track-channels));
 
-  /* Semantic surfaces. Elevation on dark comes from lightness, never glow. */
   --color-surface-base: var(--color-paper);
   --color-surface-panel: var(--color-paper-2);
   --color-surface-raised: var(--color-paper-3);
-  --color-border-subtle: oklch(var(--rule-channels) / 0.54);
-  --color-border-strong: oklch(var(--rule-2-channels) / 0.72);
+  --color-border-subtle: oklch(var(--rule-channels) / 0.8);
+  --color-border-strong: oklch(var(--rule-2-channels));
 
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-  --font-outlier: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-display: "Unbounded Variable", "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-outlier: var(--font-body);
 
-  --radius-input: 0.75rem;
-  --radius-card: 1.125rem;
-  --radius-panel: 1.5rem;
+  --radius-input: 0.875rem;
+  --radius-card: 1.375rem;
+  --radius-panel: 1.75rem;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 0 oklch(100% 0 0 / 0.025);
-  --shadow-overlay: 0 24px 80px oklch(0% 0 0 / 0.6);
 
   --space-page-x: clamp(1rem, 2.8vw, 2.5rem);
-  --space-page-y: clamp(1.5rem, 3vw, 3rem);
+  --space-page-y: clamp(1.25rem, 3vw, 2.75rem);
   --space-panel: clamp(1.125rem, 2vw, 1.75rem);
-  --content-max: 90rem;
-  --rail-width: 15rem;
+  --content-max: 76rem;
+  --rail-width: 15.5rem;
+  --nav-h: 4.5rem;
 
   --z-nav: 40;
   --z-overlay: 50;

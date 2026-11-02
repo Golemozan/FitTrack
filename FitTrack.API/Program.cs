@@ -6,9 +6,11 @@ using FitTrack.API.Security;
 using FitTrack.API.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,14 +22,32 @@ var isDev = builder.Environment.IsDevelopment();
 // Local dev uses a file next to the app binary. FITTRACK_DATA_DIR ikisini de ezer (testler kendi geçici klasörünü verir).
 var dataDir = builder.Configuration["FITTRACK_DATA_DIR"] is { Length: > 0 } customDir ? customDir
     : Directory.Exists("/var/data") ? "/var/data" : AppContext.BaseDirectory;
+
+// Üretimde kalıcı disk yoksa açılma. Konteyner içine yazılan veritabanı her yeniden başlatmada
+// sıfırlanır — sessizce çalışmak hesapların "durduk yere" silinmesi demek (2026-09-22'de yaşandı).
+if (!isDev && dataDir == AppContext.BaseDirectory)
+    throw new InvalidOperationException(
+        "Kalıcı disk bulunamadı: /var/data yok ve FITTRACK_DATA_DIR ayarlı değil. Railway'de servise /var/data volume'u bağla.");
 var dbPath = Path.Combine(dataDir, "fittrack.db");
 
-builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 1024 * 1024); // 1 MB — API'nin en büyük isteği sohbet
+builder.WebHost.ConfigureKestrel(k =>
+{
+    k.Limits.MaxRequestBodySize = 1024 * 1024; // 1 MB — API'nin en büyük isteği sohbet
+    k.AddServerHeader = false; // "Server: Kestrel" sürüm/yığın ipucu vermesin
+});
+
+// Host başlığı süzgeci isteğe bağlı: alan adları kesin biliniyorsa FITTRACK_ALLOWED_HOSTS="a.com;b.com".
+// Varsayılan açık — Railway alan adı değişince ya da özel alan adı eklenince servis kendi kendini kilitlemesin.
+if (builder.Configuration["FITTRACK_ALLOWED_HOSTS"] is { Length: > 0 } allowedHosts)
+    builder.Configuration["AllowedHosts"] = allowedHosts;
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddSingleton<KeyProtector>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<KnownDevice>();
+builder.Services.AddSingleton(new RegistrationGate(builder.Configuration.GetValue("RateLimit:Register", 30)));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
@@ -36,6 +56,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddDataProtection()
     .SetApplicationName("FitTrack")
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataDir, "dataprotection-keys")));
+// Halka diskte şifreli dursun (bkz. KeyringEncryptor). Ana anahtar yoksa eskisi gibi düz kalır, uygulama açılır.
+builder.Services.AddOptions<KeyManagementOptions>().Configure<KeyProtector>((o, protector) =>
+{
+    if (protector.IsAvailable) o.XmlEncryptor = new KeyringEncryptor(protector);
+});
 
 // Railway TLS'i kendi kenarında sonlandırıp X-Forwarded-* ile iletir. ForwardLimit=1: yalnız en sağdaki
 // (Railway'in eklediği) değer okunur, istemcinin kendi yazdığı sahte başlıklar hız sınırını atlatamaz.
@@ -56,7 +81,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         o.Cookie.SameSite = SameSiteMode.Strict; // başka siteden gelen istek çerez taşımaz → CSRF'ye ilk kalkan
         o.Cookie.SecurePolicy = isDev ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         o.Cookie.Path = "/";
-        o.ExpireTimeSpan = TimeSpan.FromDays(14);
+        o.ExpireTimeSpan = TimeSpan.FromDays(14); // AuthController.SessionLifetime bundan uzun olmalı
         o.SlidingExpiration = true;
         o.Events = new CookieAuthenticationEvents
         {
@@ -96,17 +121,27 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy(RateLimits.Sensitive, ctx => RateLimitPartition.GetFixedWindowLimiter(UserOrIp(ctx),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("Sensitive", 10), Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
 
-    // Eski parola: tüm sunucu için saatte 20 deneme.
-    o.AddPolicy(RateLimits.Legacy, _ => RateLimitPartition.GetFixedWindowLimiter("global",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("Legacy", 20), Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+    // Hesap silme: kendi kovası — parola değiştirme denemeleri silmeyi kilitlemesin (ve tersi).
+    o.AddPolicy(RateLimits.Destructive, ctx => RateLimitPartition.GetFixedWindowLimiter(UserOrIp(ctx),
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("Destructive", 5), Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+
+    // Eski parola: IP başına saatte 10. Küresel kova bir kişinin kotayı tüketip asıl sahibi bir saat
+    // kilitlemesine izin veriyordu; parola rastgele ve uzun olduğundan tahmin zaten pratik değil.
+    o.AddPolicy(RateLimits.Legacy, ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx),
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("Legacy", 10), Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
 });
 
 builder.Services.AddControllers()
-    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    // Enum yalnız adıyla: "mealType": 99 gibi tanımsız sayılar kayda girmesin.
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)))
+    // Bozuk gövde: .NET tip adları ve satır/konum ayrıntısı istemciye gitmez.
+    .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = _ =>
+        new BadRequestObjectResult(new { error = "Geçersiz istek." }));
 
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ApiKeyService>();
 builder.Services.AddScoped<CoachService>();
+builder.Services.AddScoped<AchievementService>();
 builder.Services.AddHostedService<TelegramBotService>();
 builder.Services.AddHostedService<DailyCoachService>();
 
@@ -121,6 +156,8 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("PRAGMA journal_mode=DELETE;");
         SchemaUpgrade.Run(db);
         db.Database.ExecuteSqlRaw("DELETE FROM CoachMessages WHERE CreatedAt < datetime('now', '-3 days');");
+        PasswordReset.Apply(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), app.Logger,
+            builder.Configuration["FITTRACK_RESET_EMAIL"], builder.Configuration["FITTRACK_RESET_PASSWORD"]);
     }
     catch (Exception ex) { app.Logger.LogError(ex, "DB init failed."); }
 }
@@ -138,11 +175,18 @@ app.UseForwardedHeaders();
 app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
 {
     var ex = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;
-    var forbidden = ex is UnauthorizedAccessException;
-    if (!forbidden) app.Logger.LogError(ex, "İşlenmeyen hata: {Path}", ctx.Request.Path);
-    ctx.Response.StatusCode = forbidden ? StatusCodes.Status404NotFound : StatusCodes.Status500InternalServerError;
+    var (status, message) = ex switch
+    {
+        UnauthorizedAccessException => (StatusCodes.Status404NotFound, "Bulunamadı."),
+        DataRuleException rule => (StatusCodes.Status400BadRequest, rule.Message), // DataRules: sınır/kota
+        BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (StatusCodes.Status413PayloadTooLarge, "İstek çok büyük."),
+        BadHttpRequestException bad => (bad.StatusCode, "Geçersiz istek."),
+        _ => (StatusCodes.Status500InternalServerError, "Sunucu hatası."),
+    };
+    if (status == StatusCodes.Status500InternalServerError) app.Logger.LogError(ex, "İşlenmeyen hata: {Path}", ctx.Request.Path);
+    ctx.Response.StatusCode = status;
     ctx.Response.ContentType = "application/json; charset=utf-8";
-    await ctx.Response.WriteAsJsonAsync(new { error = forbidden ? "Bulunamadı." : "Sunucu hatası." });
+    await ctx.Response.WriteAsJsonAsync(new { error = message });
 }));
 
 app.UseMiddleware<SecurityHeadersMiddleware>();

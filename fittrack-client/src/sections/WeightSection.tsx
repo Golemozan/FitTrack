@@ -103,7 +103,7 @@ export default function WeightSection() {
             </EmptyState>
           ) : (
             <div className="flex flex-col items-center gap-1 text-center">
-              <div className="num text-6xl text-accent">
+              <div className="num text-6xl text-accentfg">
                 {s.currentWeight.toFixed(1)}
                 <span className="ml-1 text-2xl text-neutral-400">kg</span>
               </div>
@@ -189,11 +189,11 @@ export default function WeightSection() {
                     type="monotone"
                     dataKey="kg"
                     name="Kilo (kg)"
-                    stroke="var(--color-accent)"
+                    stroke="var(--color-flow)"
                     strokeWidth={2.5}
                     fill="var(--color-accent-soft)"
                     fillOpacity={0.55}
-                    dot={{ r: 2.5, fill: "var(--color-accent)" }}
+                    dot={{ r: 2.5, fill: "var(--color-flow)" }}
                     activeDot={{ r: 5 }}
                   />
                 </AreaChart>
@@ -285,7 +285,7 @@ export default function WeightSection() {
                   type="date"
                   value={logDate}
                   onChange={(e) => setLogDate(e.target.value)}
-                  className="w-full rounded-lg border border-hair bg-card2 px-3 py-2 text-sm text-neutral-200 outline-none focus:border-accent [color-scheme:dark]"
+                  className="w-full rounded-lg border border-hair bg-card2 px-3 py-2 text-sm text-neutral-200 outline-none focus:border-accentfg [color-scheme:dark]"
                 />
                 <p className="mt-1 text-[11px] text-neutral-500">Geçmiş tarihli kilo girişi için tarihi değiştir.</p>
               </div>
@@ -348,14 +348,14 @@ function WeightRow({ log }: { log: WeightLog }) {
           step="0.1"
           value={w}
           onChange={(e) => setW(e.target.value)}
-          className="w-20 rounded-lg border border-hair bg-card2 px-2 py-1 text-center tabular-nums outline-none focus:border-accent"
+          className="w-20 rounded-lg border border-hair bg-card2 px-2 py-1 text-center tabular-nums outline-none focus:border-accentfg"
           autoFocus
         />
         <input
           value={n}
           onChange={(e) => setN(e.target.value)}
           placeholder="Not"
-          className="min-w-0 flex-1 rounded-lg border border-hair bg-card2 px-2 py-1 outline-none focus:border-accent"
+          className="min-w-0 flex-1 rounded-lg border border-hair bg-card2 px-2 py-1 outline-none focus:border-accentfg"
         />
         <button onClick={save} className="rounded-lg bg-accent p-1.5 text-accentink" aria-label="Kaydet">
           <Check size={14} />
@@ -381,7 +381,7 @@ function WeightRow({ log }: { log: WeightLog }) {
         <span className="num text-base tabular-nums">{log.weightKg}<span className="ml-0.5 text-[10px] font-normal text-neutral-400">kg</span></span>
         <button
           onClick={start}
-          className="text-neutral-400 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+          className="text-neutral-400 opacity-0 transition-opacity hover:text-accentfg group-hover:opacity-100"
           aria-label="Düzenle"
         >
           <Pencil size={15} />

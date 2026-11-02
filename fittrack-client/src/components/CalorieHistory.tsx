@@ -94,14 +94,14 @@ export default function CalorieHistory({ days, onSelectDay }: Props) {
           {goal > 0 && (
             <ReferenceLine
               y={goal}
-              stroke="var(--color-accent)"
+              stroke="var(--color-move)"
               strokeDasharray="6 3"
               strokeOpacity={0.6}
               label={{
                 value: `hedef ${goal}`,
                 position: "insideTopRight",
                 fontSize: 10,
-                fill: "var(--color-accent)",
+                fill: "var(--color-move)",
               }}
             />
           )}

@@ -7,6 +7,7 @@ using FitTrack.API.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -25,8 +26,12 @@ public class AuthController : ControllerBase
 {
     public const int MinPassword = 10;
     public const int MaxPassword = 128;
-    private const int MaxFailedLogins = 5;
+    /// <summary>Aynı e-posta + aynı IP: bu kadar hatadan sonra o IP o hesap için 15 dk susturulur.</summary>
+    private const int MaxFailedPerSource = 5;
+    /// <summary>Hesabın toplam hatası (her IP'den): dağıtık denemeye karşı ikinci eşik.</summary>
+    private const int MaxFailedPerAccount = 30;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+    private const string GenericLoginError = "E-posta ya da parola hatalı.";
 
     /// <summary>
     /// Olmayan hesaba giriş denemesi de gerçek bir PBKDF2 doğrulaması kadar sürsün —
@@ -38,13 +43,20 @@ public class AuthController : ControllerBase
     private readonly IPasswordHasher<User> _hasher;
     private readonly ApiKeyService _keys;
     private readonly ILogger<AuthController> _log;
+    private readonly IMemoryCache _cache;
+    private readonly RegistrationGate _gate;
+    private readonly KnownDevice _device;
 
-    public AuthController(AppDbContext db, IPasswordHasher<User> hasher, ApiKeyService keys, ILogger<AuthController> log)
+    public AuthController(AppDbContext db, IPasswordHasher<User> hasher, ApiKeyService keys, ILogger<AuthController> log,
+        IMemoryCache cache, RegistrationGate gate, KnownDevice device)
     {
         _db = db;
         _hasher = hasher;
         _keys = keys;
         _log = log;
+        _cache = cache;
+        _gate = gate;
+        _device = device;
     }
 
     [AllowAnonymous]
@@ -63,6 +75,10 @@ public class AuthController : ControllerBase
 
         if (await _db.Users.AnyAsync(u => u.Email == email, ct))
             return Conflict(new { error = "Bu e-posta ile kayıtlı bir hesap var." });
+
+        // IP sınırının yanında sunucu geneli tavan: IP taklit edilse bile sınırsız hesap açılamasın.
+        if (!_gate.TryEnter())
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Şu an yeni kayıt alınamıyor. Biraz sonra tekrar dene." });
 
         var user = new User
         {
@@ -91,38 +107,41 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<SessionResponse>> Login(LoginRequest req, CancellationToken ct)
     {
-        const string generic = "E-posta ya da parola hatalı.";
         var email = NormalizeEmail(req.Email);
         var password = req.Password ?? "";
         var user = email is null ? null : await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
 
-        if (user is null || password.Length > MaxPassword)
+        // Kilit hesabı değil kaynağı (e-posta + IP) susturur: saldırgan kendini kilitler, sahibi başka
+        // yerden girebilir. Hesap geneli eşik dağıtık denemeye karşı. Kilitliyken de cevap ve süre
+        // yanlış parolayla birebir aynı — kilit durumu "bu hesap var" diye okunamasın.
+        var sourceKey = $"login-fail:{email}:{HttpContext.Connection.RemoteIpAddress}";
+        var sourceLocked = _cache.TryGetValue(sourceKey, out int sourceFails) && sourceFails >= MaxFailedPerSource;
+        // Hesap kilidi, bu hesaba daha önce girmiş cihazı durdurmaz (bkz. KnownDevice).
+        var accountLocked = user?.LockoutUntil is { } until && until > DateTime.UtcNow && !_device.Matches(Request, user.Id);
+
+        if (user is null || password.Length > MaxPassword || sourceLocked || accountLocked)
         {
             _hasher.VerifyHashedPassword(new User(), DummyHash, password.Length > MaxPassword ? "" : password);
-            return Unauthorized(new { error = generic });
-        }
-
-        if (user.LockoutUntil is { } until && until > DateTime.UtcNow)
-        {
-            var minutes = Math.Max(1, (int)Math.Ceiling((until - DateTime.UtcNow).TotalMinutes));
-            return StatusCode(StatusCodes.Status429TooManyRequests,
-                new { error = $"Çok fazla hatalı deneme. {minutes} dakika sonra tekrar dene." });
+            if (!sourceLocked) CountFailure(sourceKey, sourceFails);
+            return Unauthorized(new { error = GenericLoginError });
         }
 
         var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (result == PasswordVerificationResult.Failed)
         {
+            CountFailure(sourceKey, sourceFails);
             user.FailedLoginCount++;
-            if (user.FailedLoginCount >= MaxFailedLogins)
+            if (user.FailedLoginCount >= MaxFailedPerAccount)
             {
                 user.LockoutUntil = DateTime.UtcNow.Add(LockoutDuration);
                 user.FailedLoginCount = 0;
-                _log.LogWarning("Hesap geçici olarak kilitlendi: {UserId}", user.Id);
+                _log.LogWarning("Hesap geçici olarak kilitlendi (dağıtık deneme): {UserId}", user.Id);
             }
             await _db.SaveChangesAsync(ct);
-            return Unauthorized(new { error = generic });
+            return Unauthorized(new { error = GenericLoginError });
         }
 
+        _cache.Remove(sourceKey);
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
             user.PasswordHash = _hasher.HashPassword(user, password);
         user.FailedLoginCount = 0;
@@ -135,11 +154,25 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [AllowAnonymous] // süresi dolmuş çerezle de çıkış yapılabilsin
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> Logout(CancellationToken ct)
     {
+        // Çerezi tarayıcıdan silmek yetmez; kopyası varsa o da ölsün diye oturum kimliği iptal listesine.
+        var userId = CurrentUser.FromPrincipal(User);
+        var sid = User.FindFirst(SessionValidation.SessionClaim)?.Value;
+        if (userId is not null && sid is not null && !await _db.RevokedSessions.AnyAsync(r => r.Sid == sid, ct))
+        {
+            _db.RevokedSessions.Add(new RevokedSession { Sid = sid, UserId = userId.Value, ExpiresAt = DateTime.UtcNow.Add(SessionLifetime) });
+            await _db.SaveChangesAsync(ct);
+        }
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return NoContent();
     }
+
+    /// <summary>Çerezin en uzun ömrü (Program.cs ExpireTimeSpan) + pay. İptal kaydı bu kadar tutulur.</summary>
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(15);
+
+    private void CountFailure(string key, int current) =>
+        _cache.Set(key, current + 1, LockoutDuration);
 
     [HttpGet("me")]
     public async Task<ActionResult<SessionResponse>> Me(CancellationToken ct)
@@ -155,7 +188,11 @@ public class AuthController : ControllerBase
     internal async Task<SessionResponse> ToSession(User user, CancellationToken ct) =>
         new(user.Id, user.Email, user.DisplayName, await _keys.HasKeyAsync(user.Id, ct), _keys.StorageAvailable);
 
-    internal Task SignInAsync(User user) => SignInAsync(HttpContext, user);
+    internal Task SignInAsync(User user)
+    {
+        _device.Remember(Response, user.Id);
+        return SignInAsync(HttpContext, user);
+    }
 
     public static Task SignInAsync(HttpContext http, User user)
     {
@@ -163,6 +200,7 @@ public class AuthController : ControllerBase
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(SessionValidation.VersionClaim, user.SessionVersion.ToString()),
+            new Claim(SessionValidation.SessionClaim, Guid.NewGuid().ToString("N")),
         }, CookieAuthenticationDefaults.AuthenticationScheme);
 
         return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
@@ -189,6 +227,6 @@ public class AuthController : ControllerBase
         if (password.Length > MaxPassword) return $"Parola en fazla {MaxPassword} karakter olabilir.";
         if (string.Equals(password.Trim(), email, StringComparison.OrdinalIgnoreCase)) return "Parola e-postanla aynı olamaz.";
         if (password.Distinct().Count() < 4) return "Parola çok tekdüze — farklı karakterler kullan.";
-        return null;
+        return PasswordPolicy.Check(password, email);
     }
 }

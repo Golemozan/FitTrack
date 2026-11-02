@@ -24,7 +24,7 @@ public class WorkoutController : ControllerBase
         };
         _db.WorkoutSessions.Add(session);
         await _db.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetToday), null, session);
+        return Created("/api/workout/session/today", session); // göreli: Host başlığı yansımasın
     }
 
     // 2. GET /api/workout/session/today
@@ -33,7 +33,7 @@ public class WorkoutController : ControllerBase
     {
         var day = DateTime.Now.Date;
         var session = await _db.WorkoutSessions
-            .Include(w => w.Exercises).ThenInclude(e => e.Sets)
+            .Include(w => w.Exercises.OrderBy(e => e.CreatedAt).ThenBy(e => e.Id)).ThenInclude(e => e.Sets)
             .Where(w => w.LoggedAt >= day && w.LoggedAt < day.AddDays(1))
             .OrderByDescending(w => w.LoggedAt)
             .FirstOrDefaultAsync();
@@ -48,11 +48,26 @@ public class WorkoutController : ControllerBase
     public async Task<ActionResult<WorkoutSession>> RenameSession(Guid id, CreateSessionRequest req)
     {
         var session = await _db.WorkoutSessions
-            .Include(w => w.Exercises).ThenInclude(e => e.Sets)
+            .Include(w => w.Exercises.OrderBy(e => e.CreatedAt).ThenBy(e => e.Id)).ThenInclude(e => e.Sets)
             .FirstOrDefaultAsync(w => w.Id == id);
         if (session is null) return NotFound();
 
         session.Name = req.Name;
+        await _db.SaveChangesAsync();
+        return Ok(session);
+    }
+
+    // 2b'. POST /api/workout/session/{id}/complete → antrenmanı güne kaydet: tekrarı girilmiş bütün setler tamamlandı
+    //      Yüklenen antrenmanda her seti tek tek işaretlemek yerine tek "Antrenmanı kaydet".
+    [HttpPost("session/{id:guid}/complete")]
+    public async Task<ActionResult<WorkoutSession>> CompleteSession(Guid id)
+    {
+        var session = await _db.WorkoutSessions
+            .Include(w => w.Exercises.OrderBy(e => e.CreatedAt).ThenBy(e => e.Id)).ThenInclude(e => e.Sets)
+            .FirstOrDefaultAsync(w => w.Id == id);
+        if (session is null) return NotFound();
+        foreach (var set in session.Exercises.SelectMany(e => e.Sets).Where(s => s.Reps > 0))
+            set.IsCompleted = true;
         await _db.SaveChangesAsync();
         return Ok(session);
     }
@@ -72,7 +87,7 @@ public class WorkoutController : ControllerBase
     [HttpGet("sessions")]
     public async Task<ActionResult<List<SessionSummary>>> GetSessions([FromQuery] int limit = 10)
     {
-        if (limit <= 0) limit = 10;
+        limit = limit <= 0 ? 10 : Math.Min(limit, 200);
         return await _db.WorkoutSessions
             .OrderByDescending(w => w.LoggedAt)
             .Take(limit)
@@ -99,6 +114,7 @@ public class WorkoutController : ControllerBase
             WorkoutSessionId = req.WorkoutSessionId,
             Name = req.Name,
             MuscleGroup = req.MuscleGroup,
+            CreatedAt = DateTime.Now,
         };
         _db.Exercises.Add(exercise);
         await _db.SaveChangesAsync();

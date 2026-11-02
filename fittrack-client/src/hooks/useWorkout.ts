@@ -60,6 +60,15 @@ export function useRenameSession() {
   });
 }
 
+/** Antrenmanı güne kaydet: tekrarı girilmiş bütün setler tek seferde tamamlanır. */
+export function useCompleteSession() {
+  const invalidate = useWorkoutInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => workoutApi.completeSession(id),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteSession() {
   const invalidate = useWorkoutInvalidate();
   return useMutation({

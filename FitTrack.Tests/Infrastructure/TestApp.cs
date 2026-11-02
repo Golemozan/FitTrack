@@ -53,6 +53,8 @@ public class TestApp : WebApplicationFactory<Program>
         builder.UseSetting("RateLimit:Sensitive", SensitiveLimit.ToString());
         builder.UseSetting("RateLimit:Coach", "100000");
         builder.UseSetting("RateLimit:Legacy", "100000");
+        builder.UseSetting("RateLimit:Register", "100000");
+        builder.UseSetting("RateLimit:Destructive", SensitiveLimit.ToString());
         builder.UseSetting("Telegram:BotToken", TelegramEnabled ? TelegramToken : "");
         builder.UseSetting("Telegram:Polling", TelegramEnabled ? "true" : "false");
 

@@ -18,7 +18,7 @@ const PORTIONS = [50, 100, 150, 200, 250, 300];
 /** Selectable tile / pill. Soft when idle, soft-accent when chosen. */
 const choiceCls = (active: boolean) =>
   `flex h-11 items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
-    active ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/40" : "bg-white/[0.04] text-neutral-300 hover:bg-white/[0.08]"
+    active ? "bg-accent/15 text-accentfg ring-1 ring-inset ring-accentfg/40" : "bg-white/[0.04] text-neutral-300 hover:bg-white/[0.08]"
   }`;
 
 // Per-gram macro basis so any picked food scales to arbitrary grams.
@@ -197,7 +197,7 @@ function Step1({
           value={rawQuery}
           onChange={(e) => setRawQuery(e.target.value)}
           placeholder="200g tavuk göğsü"
-          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent/70 focus:bg-panel"
+          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 pl-10 pr-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accentfg/70 focus:bg-panel"
         />
       </div>
 
@@ -290,7 +290,7 @@ function Step2({
           inputMode="numeric"
           value={grams}
           onChange={(e) => setGrams(Math.max(0, Number(e.target.value) || 0))}
-          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 px-3 text-sm tabular-nums text-neutral-100 outline-none transition-colors focus:border-accent/70 focus:bg-panel"
+          className="h-11 w-full rounded-xl border border-hair/70 bg-card2 px-3 text-sm tabular-nums text-neutral-100 outline-none transition-colors focus:border-accentfg/70 focus:bg-panel"
         />
       </label>
 

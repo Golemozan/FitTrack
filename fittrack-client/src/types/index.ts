@@ -233,3 +233,107 @@ export interface WeightStats {
   weeklyChange: number | null;
   lastLoggedAt: string | null;
 }
+
+// ---- Alışkanlıklar (2026-11-01) ----
+
+export type HabitIcon = "water" | "pill" | "steps" | "stretch" | "sleep" | "book" | "apple" | "check";
+
+export interface Habit {
+  id: string;
+  name: string;
+  icon: HabitIcon;
+  target: number;
+  unit: string | null;
+  sortOrder: number;
+  count: number;
+}
+
+export interface HabitRequest {
+  name: string;
+  icon: HabitIcon;
+  target: number;
+  unit: string | null;
+}
+
+// ---- Antrenman şablonları ----
+
+export interface TemplateExercise {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  sortOrder: number;
+  setCount: number;
+  targetReps: number;
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  exercises: TemplateExercise[];
+}
+
+// ---- Haftalık özet ----
+
+export interface PeriodStats {
+  from: string;
+  to: string;
+  mealDays: number;
+  avgCalories: number;
+  avgProtein: number;
+  calorieGoalDays: number;
+  proteinGoalDays: number;
+  workouts: number;
+  completedSets: number;
+  volumeKg: number;
+  weightStart: number | null;
+  weightEnd: number | null;
+  weightChange: number | null;
+  avgMood: number | null;
+  avgEnergy: number | null;
+  checkIns: number;
+  habitRate: number | null;
+  avgWater: number | null;
+}
+
+export interface WeeklySummary {
+  thisWeek: PeriodStats;
+  previousWeek: PeriodStats;
+  calorieGoal: number;
+  proteinGoal: number;
+  days: Array<{ date: string; calories: number; meals: number; workout: boolean; mood: number | null }>;
+  habits: Array<{ id: string; name: string; icon: HabitIcon; target: number; unit: string | null; daysDone: number; counts: number[] }>;
+  highlights: string[];
+}
+
+// ---- Başarımlar ----
+
+export type AchievementCategory = "nutrition" | "workout" | "weight" | "mind" | "general";
+
+export interface Achievement {
+  key: string;
+  category: AchievementCategory;
+  title: string;
+  description: string;
+  icon: string;
+  unit: string;
+  value: number;
+  level: number;
+  maxLevel: number;
+  nextTarget: number | null;
+  isNew: boolean;
+  hint: string | null;
+  tiers: Array<{ level: number; target: number; unlockedAt: string | null }>;
+}
+
+// ---- Ana sayfa kart düzeni ----
+
+export type HomeWidgetType = "mood" | "habits" | "tiles" | "coach" | "tip" | "note";
+
+export interface HomeWidget {
+  id: string;
+  type: HomeWidgetType;
+  text?: string | null;
+  topics?: string[] | null;
+}

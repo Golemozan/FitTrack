@@ -47,7 +47,7 @@ export default function AccountSection() {
 function CardTitle({ icon: Icon, children }: { icon: typeof KeyRound; children: string }) {
   return (
     <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-300">
-      <Icon size={16} className="text-accent" />
+      <Icon size={16} className="text-accentfg" />
       {children}
     </h3>
   );
@@ -121,7 +121,7 @@ function AiKeyCard() {
       {status.isPending && <ListSkeleton rows={2} />}
       {status.isError && (
         <EmptyState tone="error" title="Durum okunamadı">
-          <button onClick={() => void status.refetch()} className="min-h-10 text-accent underline-offset-2 hover:underline">Tekrar dene</button>
+          <button onClick={() => void status.refetch()} className="min-h-10 text-accentfg underline-offset-2 hover:underline">Tekrar dene</button>
         </EmptyState>
       )}
 
@@ -228,7 +228,7 @@ function TelegramCard() {
         <div className="space-y-2 text-sm text-neutral-400">
           <p>Bota şunu yaz (10 dakika geçerli, tek kullanımlık):</p>
           <p className="select-all rounded-xl bg-card2 px-3 py-2.5 font-mono text-base tracking-wider text-neutral-100">/link {code.data.code}</p>
-          <button onClick={() => void status.refetch()} className="min-h-10 text-accent hover:underline">Yazdım, kontrol et</button>
+          <button onClick={() => void status.refetch()} className="min-h-10 text-accentfg hover:underline">Yazdım, kontrol et</button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">

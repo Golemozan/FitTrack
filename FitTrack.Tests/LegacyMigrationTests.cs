@@ -54,6 +54,22 @@ public class LegacyMigrationTests : IClassFixture<LegacyApp>
     private readonly LegacyApp _app;
     public LegacyMigrationTests(LegacyApp app) => _app = app;
 
+    /// <summary>EnsureCreated dolu veritabanına tablo eklemez; 2026-11-01 tabloları SchemaUpgrade'den gelmeli.</summary>
+    [Fact]
+    public async Task New_tables_exist_on_upgraded_database()
+    {
+        var (c, _, _, _) = await _app.RegisterAsync("Yeni");
+        var water = (await (await c.GetAsync("/api/habits")).JsonAsync())[0].GetProperty("id").GetString();
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync($"/api/habits/{water}/log", new { count = 3 })).StatusCode);
+
+        var sid = (await (await c.PostAsJsonAsync("/api/workout/session", new { name = "Yeni-seans" })).JsonAsync()).GetProperty("id").GetString();
+        await c.PostAsJsonAsync("/api/workout/exercise", new { workoutSessionId = sid, name = "Squat", muscleGroup = "Bacak" });
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/api/workout/templates", new { name = "Bacak", sessionId = sid })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.GetAsync("/api/summary/weekly")).StatusCode);
+        foreach (var table in new[] { "Habits", "HabitLogs", "WorkoutTemplates", "TemplateExercises" })
+            Assert.True(_app.Scalar($"SELECT COUNT(*) FROM \"{table}\"") >= 1, table);
+    }
+
     [Fact]
     public async Task Migration_claim_flow()
     {
