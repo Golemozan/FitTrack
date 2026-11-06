@@ -63,6 +63,15 @@ export function CustomCards({ render }: { render: Partial<Record<HomeWidgetType,
 
   const update = (id: string, patch: Partial<HomeWidget>) => commit(widgets.map((w) => (w.id === id ? { ...w, ...patch } : w)));
 
+  const renderWidget = (w: HomeWidget) =>
+    w.type === "tip" ? (
+      <TipCard widget={w} editing={editing} onTopics={(topics) => update(w.id, { topics })} />
+    ) : w.type === "note" ? (
+      <NoteCard widget={w} onSave={(text) => update(w.id, { text })} />
+    ) : (
+      render[w.type]?.() ?? null
+    );
+
   return (
     <section aria-label="Kartlarım" className="min-w-0">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -95,18 +104,26 @@ export function CustomCards({ render }: { render: Partial<Record<HomeWidgetType,
           <span className="text-sm text-neutral-500">Bilgi kartları, notların, alışkanlıklar…</span>
         </button>
       ) : (
+        // Düzenleme dışında masaüstünde iki bağımsız sütun: ızgara satırları en uzun kart kadar uzayıp
+        // kısa kartın altında boşluk bırakıyordu. Sıra korunur (1 sol, 2 sağ, 3 sol…). Telefonda sütunlar
+        // `contents` ile çözülür, `order` asıl sırayı geri getirir — tek sütun, kullanıcının sırası.
+        !editing ? (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2 lg:items-start lg:gap-5">
+            {[0, 1].map((col) => (
+              <ul key={col} className="flex min-w-0 flex-col gap-4 max-lg:contents lg:gap-5">
+                {widgets.map((w, i) => ({ w, i })).filter(({ i }) => i % 2 === col).map(({ w, i }) => (
+                  <li key={w.id} className="min-w-0" style={{ order: i }}>{renderWidget(w)}</li>
+                ))}
+              </ul>
+            ))}
+          </div>
+        ) :
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={widgets.map((w) => w.id)} strategy={rectSortingStrategy}>
             <ul className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2 lg:gap-5">
               {widgets.map((w) => (
                 <SortableCard key={w.id} widget={w} editing={editing} onRemove={() => commit(widgets.filter((x) => x.id !== w.id))}>
-                  {w.type === "tip" ? (
-                    <TipCard widget={w} editing={editing} onTopics={(topics) => update(w.id, { topics })} />
-                  ) : w.type === "note" ? (
-                    <NoteCard widget={w} onSave={(text) => update(w.id, { text })} />
-                  ) : (
-                    render[w.type]?.() ?? null
-                  )}
+                  {renderWidget(w)}
                 </SortableCard>
               ))}
             </ul>

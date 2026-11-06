@@ -165,6 +165,48 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .tip-in { animation: tip-in 320ms var(--ease-out) both; }
 @keyframes tip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
+/* Ana sayfa alan kutuları (HomePage Tile): --h = alanın tonu. Açık tema orta ton + koyu mürekkep,
+   koyu tema koyu degrade + açık mürekkep. Katmanlar: zemin, parlama, doku, halkalar, cam ikon kutusu. */
+.tile {
+  background: linear-gradient(160deg, oklch(86% 0.09 var(--h)), oklch(75% 0.12 calc(var(--h) + 16)));
+  border: 1px solid oklch(92% 0.05 var(--h) / 0.8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 20px -10px oklch(45% 0.12 var(--h) / 0.45);
+}
+.tile-gloss { background: linear-gradient(180deg, rgb(255 255 255 / 0.38), transparent 46%); }
+.tile-texture {
+  background: repeating-linear-gradient(45deg, rgb(255 255 255 / 0.16) 0 1px, transparent 1px 8px);
+  -webkit-mask-image: radial-gradient(120% 100% at 100% 0%, #000, transparent 58%);
+  mask-image: radial-gradient(120% 100% at 100% 0%, #000, transparent 58%);
+}
+.tile-rings circle { stroke: rgb(255 255 255 / 0.4); }
+.tile-chip {
+  background: rgb(255 255 255 / 0.45);
+  border: 1px solid rgb(255 255 255 / 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 10px -6px oklch(40% 0.1 var(--h) / 0.5);
+}
+.tile-icon { color: oklch(40% 0.13 var(--h)); }
+.tile-ink { color: oklch(24% 0.06 var(--h)); }
+.tile-sub { color: oklch(30% 0.06 var(--h) / 0.78); }
+
+[data-theme="dark"] .tile {
+  background:
+    radial-gradient(90% 80% at 100% 0%, oklch(62% 0.15 var(--h) / 0.38), transparent 62%),
+    linear-gradient(145deg, oklch(31% 0.06 var(--h)), oklch(22% 0.04 var(--h)));
+  border-color: oklch(45% 0.07 var(--h) / 0.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 10px 24px -14px rgb(0 0 0 / 0.7);
+}
+[data-theme="dark"] .tile-gloss { background: linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%); }
+[data-theme="dark"] .tile-texture {
+  background: radial-gradient(rgb(255 255 255 / 0.09) 1px, transparent 1.5px) 0 0 / 10px 10px;
+}
+[data-theme="dark"] .tile-rings circle { stroke: oklch(80% 0.1 var(--h) / 0.18); }
+[data-theme="dark"] .tile-chip { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.16); box-shadow: none; }
+[data-theme="dark"] .tile-icon { color: oklch(82% 0.12 var(--h)); }
+[data-theme="dark"] .tile-ink { color: oklch(96% 0.02 var(--h)); }
+[data-theme="dark"] .tile-sub { color: oklch(90% 0.03 var(--h) / 0.68); }
+
 /* Azaltilmis hareket: mekansal hareket tamamen duser, halkalar dolu baslar. */
 @media (prefers-reduced-motion: reduce) {
   .ring-arc { animation: none; stroke-dashoffset: var(--ring-fill); transition: none; }

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarRange, Check, ChevronRight, Dumbbell, Flame, Frown, HeartPulse, Meh, Scale, Smile, Sparkles, UtensilsCrossed } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { CalendarRange, Check, ChevronRight, Flame, Frown, Meh, Smile, Sparkles } from "lucide-react";
+import { Barbell, ForkKnife, Heartbeat, Scales } from "@phosphor-icons/react";
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { HabitsCard } from "../components/Habits";
 import { CustomCards } from "../components/HomeWidgets";
@@ -295,30 +297,30 @@ function DomainTiles() {
   return (
     <div className="grid grid-cols-2 gap-3">
       <Tile
-        tone="bg-move text-navy"
-        icon={UtensilsCrossed}
+        tone="move"
+        icon={ForkKnife}
         title="Beslenme"
         sub={entries.length ? `${entries.length} kayıt · son: ${lastMeal?.foodName}` : "Öğün ekle"}
         onClick={() => navigate("/beslenme")}
       />
       <Tile
-        tone="bg-lift text-snow"
-        icon={Dumbbell}
+        tone="lift"
+        icon={Barbell}
         title="Antrenman"
         sub={session.data ? `${session.data.name} · ${session.data.exercises.length} hareket` : "Bugün başlat"}
         onClick={() => navigate("/antrenman")}
       />
       <Tile
-        tone="bg-flow text-navy"
-        icon={Scale}
+        tone="flow"
+        icon={Scales}
         title="Kilo"
         big={stats.data?.currentWeight != null ? stats.data.currentWeight.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : undefined}
         sub={weekly == null || weekly === 0 ? "Bu hafta değişim yok" : `${weekly > 0 ? "+" : "−"}${Math.abs(weekly).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg / hafta`}
         onClick={() => open("weight")}
       />
       <Tile
-        tone="bg-lav text-navy"
-        icon={HeartPulse}
+        tone="lav"
+        icon={Heartbeat}
         title="Durum"
         sub={lastMood ? `Ruh hali ${lastMood.mood}/5 · enerji ${lastMood.energy}/5` : "Bugün kayıt yok"}
         onClick={() => open("checkin")}
@@ -327,22 +329,40 @@ function DomainTiles() {
   );
 }
 
-function Tile({ tone, icon: Icon, title, sub, big, onClick }: { tone: string; icon: LucideIcon; title: string; sub: string; big?: string; onClick: () => void }) {
+/** Alanın renk tonu (oklch hue) — katmanların hepsi buradan türer, kartlar aynı tarifle farklı renkte. */
+const TILE_HUE = { move: 38, lift: 285, flow: 225, lav: 350 } as const;
+
+/**
+ * Çok katmanlı renkli kutu: iki tonlu degrade zemin + üst parlama + köşede çapraz çizgi dokusu +
+ * sağ altta taşan halkalar + buzlu cam ikon kutusu. Doygunluk orta tonda tutuldu (ilk sürümdeki
+ * düz doygun blok göz yoruyordu) ve yazı beyaz değil, kartın kendi tonunda koyu — açık zeminde
+ * beyaz yazı okunmuyor. Koyu temada koyu degrade + bulanık renk ışığı + nokta ızgarası (index.css).
+ */
+function Tile({ tone, icon: Icon, title, sub, big, onClick }: { tone: keyof typeof TILE_HUE; icon: PhosphorIcon; title: string; sub: string; big?: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex min-h-[9.5rem] flex-col justify-between overflow-hidden rounded-[var(--radius-card)] p-4 text-left transition-[transform,filter] duration-150 hover:brightness-[1.03] active:translate-y-px ${tone}`}
+      style={{ "--h": TILE_HUE[tone] } as CSSProperties}
+      className="tile group relative flex min-h-[9.5rem] flex-col justify-between overflow-hidden rounded-[var(--radius-card)] p-4 text-left transition-[transform,filter] duration-150 hover:brightness-[1.03] active:translate-y-px"
     >
-      {/* Dekor: köşede tek yumuşak daire — alanı tanınır kılar, bilgi taşımaz. */}
-      <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-snow/20" />
-      <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-snow/30">
-        <Icon size={19} strokeWidth={2.2} />
+      <span aria-hidden="true" className="tile-gloss pointer-events-none absolute inset-0" />
+      <span aria-hidden="true" className="tile-texture pointer-events-none absolute inset-0" />
+      <svg aria-hidden="true" className="tile-rings pointer-events-none absolute -bottom-12 -right-12 h-36 w-36" viewBox="0 0 144 144">
+        <circle cx="72" cy="72" r="38" fill="none" strokeWidth="1.5" />
+        <circle cx="72" cy="72" r="56" fill="none" strokeWidth="1.5" />
+        <circle cx="72" cy="72" r="70" fill="none" strokeWidth="1" />
+      </svg>
+      <span className="relative flex items-start justify-between">
+        <span className="tile-chip flex h-11 w-11 items-center justify-center rounded-2xl">
+          <Icon size={24} weight="duotone" className="tile-icon" />
+        </span>
+        <ChevronRight size={16} className="tile-sub mt-1 transition-transform duration-150 group-hover:translate-x-0.5" />
       </span>
       <span className="relative mt-4 block min-w-0">
-        {big && <span className="num block text-[26px]">{big}<span className="ml-1 font-sans text-sm font-semibold opacity-70">kg</span></span>}
-        <span className="block text-[15px] font-bold">{title}</span>
-        <span className="mt-0.5 line-clamp-2 block text-xs font-medium opacity-75">{sub}</span>
+        {big && <span className="num tile-ink block text-[28px]">{big}<span className="tile-sub ml-1 font-sans text-sm font-semibold">kg</span></span>}
+        <span className="tile-ink block text-[15px] font-bold">{title}</span>
+        <span className="tile-sub mt-0.5 line-clamp-2 block text-xs font-medium">{sub}</span>
       </span>
     </button>
   );
