@@ -1,5 +1,8 @@
 # FitTrack
 
+> Kendim için yazdım ve yalnızca kendim kullanıyorum. Genel kullanıma sunulan bir ürün değil;
+> kodu ve ekranları görülsün diye paylaşıyorum.
+
 Kişisel sağlık takip uygulaması — beslenme, antrenman ve kilo takibi. Çok kullanıcılı:
 herkes hesap açar, her hesabın verisi yalnız kendisine görünür. AI koçu, kullanıcının
 kendi Anthropic anahtarıyla çalışır (bkz. [Hesaplar ve güvenlik](#hesaplar-ve-güvenlik)).
@@ -14,11 +17,19 @@ kendi Anthropic anahtarıyla çalışır (bkz. [Hesaplar ve güvenlik](#hesaplar
 
 ## Ekran görüntüleri
 
-> _Placeholder — buraya ekran görüntüleri eklenecek._
->
-> | Beslenme | Antrenman | Kilo | Ayarlar |
-> |---|---|---|---|
-> | _(görsel)_ | _(görsel)_ | _(görsel)_ | _(görsel)_ |
+Görüntüler demo hesabıyla ve örnek veriyle alındı.
+
+![Ana sayfa](docs/screenshots/ana-sayfa.png)
+
+| Beslenme | Antrenman |
+|---|---|
+| ![Beslenme](docs/screenshots/beslenme.png) | ![Antrenman](docs/screenshots/antrenman.png) |
+
+| Profil | Koyu tema |
+|---|---|
+| ![Profil](docs/screenshots/profil.png) | ![Koyu tema](docs/screenshots/ana-sayfa-koyu.png) |
+
+<img src="docs/screenshots/mobil-ana-sayfa.png" alt="Mobil ana sayfa" width="280">
 
 ---
 
