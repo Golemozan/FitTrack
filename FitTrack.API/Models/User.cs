@@ -28,6 +28,8 @@ public class User
     public int SessionVersion { get; set; } = 1;
 
     public int FailedLoginCount { get; set; }
+    /// <summary>Son başarısız giriş (UTC). Sayaç bundan 15 dakika sonra sıfırdan başlar.</summary>
+    public DateTime? LastFailedLoginAt { get; set; }
     public DateTime? LockoutUntil { get; set; }
 
     public long? TelegramChatId { get; set; }
@@ -36,6 +38,17 @@ public class User
     public DateTime? TelegramLinkCodeExpiresAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Oturum iptali Telegram'ı da kapsar: ele geçirilmiş bir oturumla bağlanan sohbet, parola
+    /// değişince ya da "her yerden çık" denince hesaba erişmeye devam etmesin. Kullanıcı yeniden bağlar.
+    /// </summary>
+    public void DropTelegramLink()
+    {
+        TelegramChatId = null;
+        TelegramLinkCodeHash = null;
+        TelegramLinkCodeExpiresAt = null;
+    }
 }
 
 /// <summary>

@@ -11,4 +11,8 @@
 *.db-shm
 *.db-wal
 **/.env
+**/.env.*
+# Arayüz derlemesi bunu okur; içinde sır yok, yalnız göreli API adresi.
+!fittrack-client/.env.production
+**/appsettings.Production.json
 **/*.tsbuildinfo

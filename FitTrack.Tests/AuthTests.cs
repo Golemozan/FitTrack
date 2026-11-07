@@ -115,7 +115,7 @@ public class AuthTests : IClassFixture<TestApp>
     private static HttpRequestMessage LoginFrom(string ip, string email, string password)
     {
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login") { Content = JsonContent.Create(new { email, password }) };
-        req.Headers.Add("X-Forwarded-For", ip);
+        req.Headers.Add(TestApp.TestClientIpHeader, ip);
         return req;
     }
 

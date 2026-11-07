@@ -57,7 +57,10 @@ public class SummaryController : ControllerBase
             .OrderByDescending(w => w.LoggedAt).Take(60).Select(w => new { w.LoggedAt, w.WeightKg }).ToListAsync(ct);
         var checkins = await _db.CheckIns.AsNoTracking().Where(c => c.LoggedAt >= prevFrom && c.LoggedAt < end)
             .Select(c => new { c.LoggedAt, c.Mood, c.Energy }).ToListAsync(ct);
-        var habits = await _db.Habits.AsNoTracking().ToListAsync(ct);
+        // Arşivli alışkanlık yalnız bu pencerede kaydı varsa gelir; gerisi belleğe alınmaz.
+        var habits = await _db.Habits.AsNoTracking()
+            .Where(h => !h.IsArchived || _db.HabitLogs.Any(l => l.HabitId == h.Id && l.Day >= prevFrom && l.Day < end))
+            .ToListAsync(ct);
         var logs = await _db.HabitLogs.AsNoTracking().Where(l => l.Day >= prevFrom && l.Day < end).ToListAsync(ct);
 
         PeriodStats Stats(DateTime f, DateTime t)

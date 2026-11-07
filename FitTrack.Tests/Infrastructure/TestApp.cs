@@ -4,11 +4,14 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FitTrack.API.Data;
 using FitTrack.API.Security;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 
 namespace FitTrack.Tests.Infrastructure;
 
@@ -29,8 +32,24 @@ public class TestApp : WebApplicationFactory<Program>
     protected virtual bool WithEncryptionKey => true;
     protected virtual int AuthLimit => 100_000;
     protected virtual int SensitiveLimit => 100_000;
+    // Genel limiter testlerde kapalı değil, yalnız yüksek: kendisi GlobalLimiterTests'te varsayılan ve düşük değerlerle sınanır.
+    protected virtual int? GlobalLimit => 1_000_000;
+    protected virtual int? GlobalWriteLimit => 1_000_000;
+    protected virtual int RegisterLimit => 100_000;
+    protected virtual int? RegisterIpLimit => 100_000;
+    protected virtual bool CaptureLogs => false;
     protected virtual bool TelegramEnabled => false;
     public const string TelegramToken = "test-bot-token";
+
+    /// <summary>Testin bağlantı adresini belirler (gerçek uygulamada böyle bir başlık yok, bkz. <see cref="ClientIpProbe"/>).</summary>
+    public const string TestClientIpHeader = "X-Test-Client-Ip";
+    public const string SeenIpHeader = "X-Test-Seen-Ip";
+    public const string SeenSchemeHeader = "X-Test-Seen-Scheme";
+
+    /// <summary><see cref="CaptureLogs"/> açıkken uygulamanın yazdığı her log satırı.</summary>
+    public CapturedLogs Logs { get; } = new();
+    /// <summary>Program.cs'in kaydettiği, testte çalıştırılmayan arka plan servisleri.</summary>
+    public List<Type> RegisteredBackgroundServices { get; } = new();
 
     public string DbPath => Path.Combine(DataDir, "fittrack.db");
 
@@ -43,6 +62,9 @@ public class TestApp : WebApplicationFactory<Program>
     /// <summary>Uygulama açılmadan veritabanını hazırlamak isteyen alt sınıflar için (ör. eski şema).</summary>
     protected virtual void BeforeStart() { }
 
+    /// <summary>Alt sınıfların ek yapılandırması (ör. ortamdan gelen log ayarları).</summary>
+    protected virtual void ExtraSettings(IWebHostBuilder builder) { }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(EnvironmentName);
@@ -53,19 +75,28 @@ public class TestApp : WebApplicationFactory<Program>
         builder.UseSetting("RateLimit:Sensitive", SensitiveLimit.ToString());
         builder.UseSetting("RateLimit:Coach", "100000");
         builder.UseSetting("RateLimit:Legacy", "100000");
-        builder.UseSetting("RateLimit:Register", "100000");
+        builder.UseSetting("RateLimit:Register", RegisterLimit.ToString());
+        if (RegisterIpLimit is { } registerIp) builder.UseSetting("RateLimit:RegisterIp", registerIp.ToString());
+        if (GlobalLimit is { } global) builder.UseSetting("RateLimit:Global", global.ToString());
+        if (GlobalWriteLimit is { } globalWrite) builder.UseSetting("RateLimit:GlobalWrite", globalWrite.ToString());
         builder.UseSetting("RateLimit:Destructive", SensitiveLimit.ToString());
         builder.UseSetting("Telegram:BotToken", TelegramEnabled ? TelegramToken : "");
         builder.UseSetting("Telegram:Polling", TelegramEnabled ? "true" : "false");
+        ExtraSettings(builder);
 
         builder.ConfigureServices(services =>
         {
             // Arka plan döngüleri testte kendiliğinden koşmaz; testler onları doğrudan çağırır.
             foreach (var hosted in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)
                          && d.ImplementationType?.Namespace == "FitTrack.API.Services").ToList())
+            {
+                RegisteredBackgroundServices.Add(hosted.ImplementationType!);
                 services.Remove(hosted);
+            }
             services.ConfigureAll<HttpClientFactoryOptions>(o =>
                 o.HttpMessageHandlerBuilderActions.Add(b => b.PrimaryHandler = Anthropic));
+            services.AddSingleton<IStartupFilter>(new ClientIpProbe());
+            if (CaptureLogs) services.AddSingleton<ILoggerProvider>(Logs);
         });
     }
 
@@ -126,10 +157,37 @@ public class TestApp : WebApplicationFactory<Program>
 
     public static string SqlGuid(Guid id) => SchemaUpgrade.SqlGuid(id);
 
+    /// <summary>
+    /// TestServer'da gerçek bağlantı adresi yok. Bu adım zincirin en başında durur: başlıkla bağlantı adresi
+    /// verilebilir (test, farklı adreslerden gelen istemciyi böyle kurar) ve yanıtta uygulamanın sonunda
+    /// gördüğü IP ile şema okunur.
+    /// </summary>
+    private sealed class ClientIpProbe : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (ctx, nextMiddleware) =>
+            {
+                if (ctx.Request.Headers.TryGetValue(TestClientIpHeader, out var ip))
+                    ctx.Connection.RemoteIpAddress = IPAddress.Parse(ip.ToString());
+                ctx.Response.OnStarting(() =>
+                {
+                    ctx.Response.Headers[SeenIpHeader] = ctx.Connection.RemoteIpAddress?.ToString() ?? "";
+                    ctx.Response.Headers[SeenSchemeHeader] = ctx.Request.Scheme;
+                    return Task.CompletedTask;
+                });
+                await nextMiddleware();
+            });
+            next(app);
+        };
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        SqliteConnection.ClearAllPools();
+        // Yalnız kendi havuzu: ClearAllPools süreç geneli, paralel koşan başka bir fabrikanın açmakta olduğu
+        // bağlantıyı da kapatıp rastgele ObjectDisposedException üretiyordu.
+        using (var own = new SqliteConnection($"Data Source={DbPath}")) SqliteConnection.ClearPool(own);
         try { Directory.Delete(DataDir, recursive: true); } catch { /* Windows'ta dosya kilidi kalabilir */ }
     }
 }

@@ -47,10 +47,12 @@ builder.Services.AddSingleton<KeyProtector>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<KnownDevice>();
-builder.Services.AddSingleton(new RegistrationGate(builder.Configuration.GetValue("RateLimit:Register", 30)));
+builder.Services.AddSingleton(new RegistrationGate(
+    builder.Configuration.GetValue("RateLimit:Register", 30),
+    builder.Configuration.GetValue("RateLimit:RegisterIp", 5)));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+    options.UseSqlite($"Data Source={dbPath}").AddInterceptors(new SqliteBusyTimeoutInterceptor()));
 
 // Oturum çerezini imzalayan anahtarlar deploy'lar arasında kalıcı olmalı, yoksa her deploy herkesi dışarı atar.
 builder.Services.AddDataProtection()
@@ -62,11 +64,12 @@ builder.Services.AddOptions<KeyManagementOptions>().Configure<KeyProtector>((o, 
     if (protector.IsAvailable) o.XmlEncryptor = new KeyringEncryptor(protector);
 });
 
-// Railway TLS'i kendi kenarında sonlandırıp X-Forwarded-* ile iletir. ForwardLimit=1: yalnız en sağdaki
-// (Railway'in eklediği) değer okunur, istemcinin kendi yazdığı sahte başlıklar hız sınırını atlatamaz.
+// Railway TLS'i kendi kenarında sonlandırıp X-Forwarded-Proto ile iletir; HTTPS ve __Host- çerezi buna dayanır.
+// İstemci IP'si buradan okunmaz: X-Forwarded-For istemcinin yazdığı değerleri taşıyabilir, IP için
+// Railway'in belgelediği X-Real-IP kullanılır (bkz. RealIpMiddleware).
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
     o.ForwardLimit = 1;
     o.KnownNetworks.Clear();
     o.KnownProxies.Clear();
@@ -99,6 +102,10 @@ int Limit(string name, int fallback) => limits.GetValue(name, fallback);
 
 static string ClientIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 static string UserOrIp(HttpContext ctx) => CurrentUser.FromPrincipal(ctx.User)?.ToString() ?? $"ip:{ClientIp(ctx)}";
+static bool IsApi(HttpContext ctx) => ctx.Request.Path.StartsWithSegments("/api");
+static bool IsWrite(HttpContext ctx) =>
+    HttpMethods.IsPost(ctx.Request.Method) || HttpMethods.IsPut(ctx.Request.Method)
+    || HttpMethods.IsPatch(ctx.Request.Method) || HttpMethods.IsDelete(ctx.Request.Method);
 
 builder.Services.AddRateLimiter(o =>
 {
@@ -108,6 +115,18 @@ builder.Services.AddRateLimiter(o =>
         ctx.HttpContext.Response.ContentType = "application/json; charset=utf-8";
         await ctx.HttpContext.Response.WriteAsJsonAsync(new { error = "Çok fazla istek. Biraz bekleyip tekrar dene." }, ct);
     };
+
+    // Genel tavan, yalnız /api: kullanıcı ya da IP başına dakikada 300 istek, yazmada ek olarak 60.
+    // /health, statik dosyalar ve SPA geri düşüşü muaf. Adlandırılmış politikalar bunun üstüne ayrıca işler.
+    o.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => IsApi(ctx)
+            ? RateLimitPartition.GetFixedWindowLimiter(UserOrIp(ctx),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("Global", 300), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
+            : RateLimitPartition.GetNoLimiter("muaf")),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => IsApi(ctx) && IsWrite(ctx)
+            ? RateLimitPartition.GetFixedWindowLimiter(UserOrIp(ctx),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = Limit("GlobalWrite", 60), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
+            : RateLimitPartition.GetNoLimiter("muaf")));
 
     // Giriş/kayıt: IP başına dakikada 10. Hesap başına kilit ayrıca AuthController'da.
     o.AddPolicy(RateLimits.Auth, ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx),
@@ -138,12 +157,18 @@ builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = _ =>
         new BadRequestObjectResult(new { error = "Geçersiz istek." }));
 
+// Telegram bot token'ı URL yolunda duruyor; HttpClient'ın varsayılan günlüğü tam URL'yi yazar.
+// Filtre bu kategoriyi Warning'e çeker. Günlük işleyicisi de tümden kaldırılır: daha özel bir kategori ya da
+// sağlayıcı kuralı (Logging__...) ortamdan yazılsa bile token'lı satır üretilecek bir yer kalmaz.
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+builder.Services.ConfigureHttpClientDefaults(b => b.RemoveAllLoggers());
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ApiKeyService>();
 builder.Services.AddScoped<CoachService>();
 builder.Services.AddScoped<AchievementService>();
 builder.Services.AddHostedService<TelegramBotService>();
 builder.Services.AddHostedService<DailyCoachService>();
+builder.Services.AddHostedService<CoachMessageCleanupService>();
 
 var app = builder.Build();
 
@@ -155,7 +180,7 @@ using (var scope = app.Services.CreateScope())
         db.Database.EnsureCreated();
         db.Database.ExecuteSqlRaw("PRAGMA journal_mode=DELETE;");
         SchemaUpgrade.Run(db);
-        db.Database.ExecuteSqlRaw("DELETE FROM CoachMessages WHERE CreatedAt < datetime('now', '-3 days');");
+        CoachMessageCleanupService.Run(db);
         PasswordReset.Apply(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), app.Logger,
             builder.Configuration["FITTRACK_RESET_EMAIL"], builder.Configuration["FITTRACK_RESET_PASSWORD"]);
     }
@@ -169,6 +194,10 @@ app.Logger.LogInformation(
     dbPath, TimeZoneInfo.Local.Id, DateTime.Now);
 
 app.UseForwardedHeaders();
+
+// Hız sınırları ve giriş kilidi RemoteIpAddress okur; bu adım hepsinden önce çalışmalı.
+// Geliştirme ortamında Railway kenarı yok, başlığı herkes yazabilir: güvenilmez.
+if (!isDev) app.UseMiddleware<RealIpMiddleware>();
 
 // Beklenmeyen hata: yığın izi ya da iç ayrıntı istemciye gitmez.
 // Sahiplik ihlali (AppDbContext.EnforceOwnership) 404 olarak döner — kaydın varlığı bile sızmasın.

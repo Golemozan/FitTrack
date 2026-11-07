@@ -102,6 +102,7 @@ public class AccountController : ControllerBase
 
         user.PasswordHash = _hasher.HashPassword(user, req.NewPassword);
         user.SessionVersion++; // diğer tüm cihazlar düşer
+        user.DropTelegramLink(); // Telegram sohbeti de: oturum gibi bir erişim yolu
         await _db.SaveChangesAsync(ct);
         await AuthController.SignInAsync(HttpContext, user); // bu cihaz açık kalır
         return NoContent();
@@ -113,6 +114,7 @@ public class AccountController : ControllerBase
         var user = await LoadUserAsync(ct);
         if (user is null) return Unauthorized();
         user.SessionVersion++;
+        user.DropTelegramLink();
         await _db.SaveChangesAsync(ct);
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return NoContent();

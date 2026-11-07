@@ -31,6 +31,8 @@ public class AuthController : ControllerBase
     /// <summary>Hesabın toplam hatası (her IP'den): dağıtık denemeye karşı ikinci eşik.</summary>
     private const int MaxFailedPerAccount = 30;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+    /// <summary>Son hatadan bu kadar sonra hesap sayacı sıfırdan başlar: yavaş damla eşiğe ulaşıp sahibini kilitleyemesin.</summary>
+    private static readonly TimeSpan FailedLoginDecay = TimeSpan.FromMinutes(15);
     private const string GenericLoginError = "E-posta ya da parola hatalı.";
 
     /// <summary>
@@ -77,7 +79,7 @@ public class AuthController : ControllerBase
             return Conflict(new { error = "Bu e-posta ile kayıtlı bir hesap var." });
 
         // IP sınırının yanında sunucu geneli tavan: IP taklit edilse bile sınırsız hesap açılamasın.
-        if (!_gate.TryEnter())
+        if (!_gate.TryEnter(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"))
             return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Şu an yeni kayıt alınamıyor. Biraz sonra tekrar dene." });
 
         var user = new User
@@ -130,10 +132,14 @@ public class AuthController : ControllerBase
         if (result == PasswordVerificationResult.Failed)
         {
             CountFailure(sourceKey, sourceFails);
+            var now = DateTime.UtcNow;
+            if (user.LastFailedLoginAt is not { } lastFailure || now - lastFailure >= FailedLoginDecay)
+                user.FailedLoginCount = 0;
+            user.LastFailedLoginAt = now;
             user.FailedLoginCount++;
             if (user.FailedLoginCount >= MaxFailedPerAccount)
             {
-                user.LockoutUntil = DateTime.UtcNow.Add(LockoutDuration);
+                user.LockoutUntil = now.Add(LockoutDuration);
                 user.FailedLoginCount = 0;
                 _log.LogWarning("Hesap geçici olarak kilitlendi (dağıtık deneme): {UserId}", user.Id);
             }
@@ -145,6 +151,7 @@ public class AuthController : ControllerBase
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
             user.PasswordHash = _hasher.HashPassword(user, password);
         user.FailedLoginCount = 0;
+        user.LastFailedLoginAt = null;
         user.LockoutUntil = null;
         await _db.SaveChangesAsync(ct);
 

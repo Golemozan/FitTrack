@@ -283,6 +283,7 @@ public class CoachService
                 {
                     var date = ParseDate(Str(input, "date")) ?? DateTime.Now;
                     var day = date.Date;
+                    if (!DataRules.InWindow(day)) return ("Tarih geçersiz: gelecek ya da çok eski bir gün olamaz.", null, true);
                     var existing = await _db.WeightLogs.FirstOrDefaultAsync(w => w.LoggedAt >= day && w.LoggedAt < day.AddDays(1));
                     var kg = Num(input, "weightKg");
                     var notes = Str(input, "notes");
@@ -325,6 +326,7 @@ public class CoachService
                 {
                     var date = ParseDate(Str(input, "date")) ?? DateTime.Now;
                     var day = date.Date;
+                    if (!DataRules.InWindow(day)) return ("Tarih geçersiz: gelecek ya da çok eski bir gün olamaz.", null, true);
                     var meals = await _db.MealEntries
                         .Where(m => m.LoggedAt >= day && m.LoggedAt < day.AddDays(1))
                         .OrderBy(m => m.LoggedAt)

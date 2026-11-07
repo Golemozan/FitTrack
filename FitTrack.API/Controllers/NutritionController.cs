@@ -112,6 +112,7 @@ public class NutritionController : ControllerBase
     {
         if (!DateTime.TryParse(date, out var day))
             return BadRequest(new { error = "Geçersiz tarih formatı. YYYY-MM-DD kullan." });
+        if (!DataRules.InWindow(day.Date)) return BadRequest(new { error = "Tarih geçersiz." });
 
         var entries = await _db.MealEntries
             .Where(m => m.LoggedAt >= day.Date && m.LoggedAt < day.Date.AddDays(1))
@@ -131,13 +132,10 @@ public class NutritionController : ControllerBase
     {
         days = Math.Clamp(days, 1, DataRules.MaxDaysBack);
         var since = DateTime.Now.Date.AddDays(-days + 1);
-        var entries = await _db.MealEntries
+        // Toplama SQL'de: pencere 10 yıl, satırları belleğe almak hesap başına on binlerce kayıt demek.
+        var daily = await _db.MealEntries
             .Where(m => m.LoggedAt >= since)
-            .ToListAsync();
-
-        var daily = entries
             .GroupBy(m => m.LoggedAt.Date)
-            .OrderBy(g => g.Key)
             .Select(g => new DailyNutritionSummary
             {
                 Date = g.Key,
@@ -147,9 +145,9 @@ public class NutritionController : ControllerBase
                 TotalFat = g.Sum(m => m.Fat),
                 MealCount = g.Count(),
             })
-            .ToList();
+            .ToListAsync();
 
-        return Ok(daily);
+        return Ok(daily.OrderBy(d => d.Date).ToList());
     }
 
     // GET /api/nutrition/streak → consecutive days with at least 1 meal logged

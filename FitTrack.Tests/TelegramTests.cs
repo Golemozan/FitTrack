@@ -231,6 +231,52 @@ public class TelegramTests : IClassFixture<TelegramApp>
         Assert.Contains("Yemekli", (string)single.Body!["system"]!);
     }
 
+    /// <summary>Parola değişince aynı istekte oturumlar ve Telegram düşer; bu cihaz açık kalır, bekleyen kod da ölür.</summary>
+    [Fact]
+    public async Task Password_change_drops_telegram_link_and_pending_code()
+    {
+        var (web, userId, _, password) = await _app.RegisterAsync("Parolaci");
+        var chat = NewChat();
+        await Say(chat, $"/link {await CodeFor(web)}");
+        Assert.True((await (await web.GetAsync("/api/account/telegram")).JsonAsync()).GetProperty("linked").GetBoolean());
+        var pending = await CodeFor(web);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await web.PostAsJsonAsync("/api/account/password",
+            new { currentPassword = password, newPassword = "yepyeni-parola-77" })).StatusCode);
+
+        Assert.False((await (await web.GetAsync("/api/account/telegram")).JsonAsync()).GetProperty("linked").GetBoolean());
+        Assert.Equal(0, _app.Scalar("SELECT COUNT(*) FROM Users WHERE Id=$u AND (TelegramChatId IS NOT NULL OR TelegramLinkCodeHash IS NOT NULL OR TelegramLinkCodeExpiresAt IS NOT NULL)", ("$u", TestApp.SqlGuid(userId))));
+
+        await Say(chat, "eski sohbetten mesaj");
+        Assert.Contains(_app.Anthropic.SentTo(chat), t => t.Contains("bağlı değil"));
+        var thief = NewChat();
+        await Say(thief, $"/link {pending}");
+        Assert.Contains(_app.Anthropic.SentTo(thief), t => t.Contains("geçersiz"));
+    }
+
+    [Fact]
+    public async Task Logout_all_drops_telegram_link_and_pending_code()
+    {
+        var (web, userId, email, password) = await _app.RegisterAsync("Cikisci");
+        var chat = NewChat();
+        await Say(chat, $"/link {await CodeFor(web)}");
+        var pending = await CodeFor(web);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await web.PostAsync("/api/account/logout-all", null)).StatusCode);
+
+        Assert.Equal(0, _app.Scalar("SELECT COUNT(*) FROM Users WHERE Id=$u AND (TelegramChatId IS NOT NULL OR TelegramLinkCodeHash IS NOT NULL OR TelegramLinkCodeExpiresAt IS NOT NULL)", ("$u", TestApp.SqlGuid(userId))));
+        await Say(chat, "eski sohbetten mesaj");
+        Assert.Contains(_app.Anthropic.SentTo(chat), t => t.Contains("bağlı değil"));
+        var thief = NewChat();
+        await Say(thief, $"/link {pending}");
+        Assert.Contains(_app.Anthropic.SentTo(thief), t => t.Contains("geçersiz"));
+
+        // Kullanıcı yeniden girip Hesap ekranından durumu görür ve tekrar bağlayabilir.
+        var again = _app.Browser();
+        Assert.Equal(HttpStatusCode.OK, (await again.PostAsJsonAsync("/api/auth/login", new { email, password })).StatusCode);
+        Assert.False((await (await again.GetAsync("/api/account/telegram")).JsonAsync()).GetProperty("linked").GetBoolean());
+    }
+
     [Fact]
     public async Task Link_code_endpoint_disabled_without_bot()
     {

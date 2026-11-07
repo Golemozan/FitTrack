@@ -30,6 +30,12 @@ public class FakeAnthropic : HttpMessageHandler
 
     public IEnumerable<string> SentTo(long chatId) => TelegramSent.Where(m => m.ChatId == chatId).Select(m => m.Text);
 
+    /// <summary>/v1/messages cevaplanmadan önce beklenir: testler koç çağrısını açık tutup eşzamanlılığı ölçer.</summary>
+    public Func<CancellationToken, Task>? BeforeMessage { get; set; }
+
+    /// <summary>getUpdates'in sonucu (yoklama döngüsü testleri). Verilmezse boş liste döner.</summary>
+    public Func<HttpRequestMessage, CancellationToken, Task<JsonArray>>? GetUpdates { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (request.RequestUri?.Host == "api.telegram.org")
@@ -39,6 +45,8 @@ public class FakeAnthropic : HttpMessageHandler
                 var msg = JsonNode.Parse(await request.Content.ReadAsStringAsync(ct))!;
                 TelegramSent.Enqueue(((long)msg["chat_id"]!, (string)msg["text"]!));
             }
+            if (request.RequestUri.AbsolutePath.EndsWith("/getUpdates") && GetUpdates is { } getUpdates)
+                return Json(HttpStatusCode.OK, new JsonObject { ["ok"] = true, ["result"] = await getUpdates(request, ct) });
             return Json(HttpStatusCode.OK, new JsonObject { ["ok"] = true, ["result"] = new JsonArray() });
         }
 
@@ -60,6 +68,7 @@ public class FakeAnthropic : HttpMessageHandler
         {
             if (RevokedKeys.Contains(key) || !ValidKeys.Contains(key))
                 return Json(HttpStatusCode.Unauthorized, Error("authentication_error"));
+            if (BeforeMessage is { } before) await before(ct);
             var (status, payload) = Respond(body!);
             return Json(status, payload);
         }

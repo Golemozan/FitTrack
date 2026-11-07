@@ -51,6 +51,14 @@ public class SecurityRegressionTests : IClassFixture<TestApp>
         foreach (var url in new[] { "/api/nutrition/history?days=100000000", "/api/nutrition/history?days=-2147483648", "/api/weight/history?days=100000000" })
             Assert.Equal(HttpStatusCode.OK, (await a.GetAsync(url)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await a.GetAsync("/api/nutrition/summary?date=9999-12-31")).StatusCode);
+        foreach (var bad in new[] { "9999-12-31", "0001-01-01", "2200-01-01" })
+        {
+            var day = await a.GetAsync($"/api/nutrition/day/{bad}");
+            Assert.Equal(HttpStatusCode.BadRequest, day.StatusCode);
+            Assert.False(string.IsNullOrEmpty((await day.JsonAsync()).GetProperty("error").GetString()));
+        }
+        Assert.Equal(HttpStatusCode.OK, (await a.GetAsync($"/api/nutrition/day/{DateTime.Now:yyyy-MM-dd}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.GetAsync("/api/habits?date=9999-12-31")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await a.PostAsJsonAsync("/api/weight/log", new { weightKg = 80, loggedAt = "9999-12-31T00:00:00" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await a.PostAsJsonAsync("/api/nutrition/log",
             new { foodName = "x", grams = 100, calories = 100, protein = 1, carbs = 1, fat = 1, mealType = "Lunch", logDate = "0001-01-01T00:00:00" })).StatusCode);

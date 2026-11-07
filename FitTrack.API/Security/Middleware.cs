@@ -1,4 +1,39 @@
+using System.Net;
+using System.Net.Sockets;
+using Microsoft.Extensions.Primitives;
+
 namespace FitTrack.API.Security;
+
+/// <summary>
+/// Üretimde istemci adresi Railway'in belgelediği <c>X-Real-IP</c> başlığından alınır. Başlık yoksa ya da
+/// tek bir geçerli IP değilse bağlantı adresi kalır. Yalnız üretimde eklenir (bkz. Program.cs).
+/// </summary>
+public class RealIpMiddleware
+{
+    public const string HeaderName = "X-Real-IP";
+
+    private readonly RequestDelegate _next;
+    public RealIpMiddleware(RequestDelegate next) => _next = next;
+
+    public Task InvokeAsync(HttpContext ctx)
+    {
+        if (TryParse(ctx.Request.Headers[HeaderName]) is { } ip)
+            ctx.Connection.RemoteIpAddress = ip;
+        return _next(ctx);
+    }
+
+    /// <summary><see cref="IPAddress.TryParse(string, out IPAddress)"/> "1", "010.0.0.1", "[::1]:80" gibi biçimleri de kabul eder; onlar geçersiz sayılır.</summary>
+    internal static IPAddress? TryParse(StringValues values)
+    {
+        if (values.Count != 1) return null;
+        var raw = values[0]?.Trim();
+        if (string.IsNullOrEmpty(raw) || !IPAddress.TryParse(raw, out var ip)) return null;
+        if (ip.AddressFamily == AddressFamily.InterNetwork)
+            return ip.ToString() == raw ? ip : null;
+        if (raw.Contains('[') || raw.Contains('%') || ip.ScopeId != 0) return null;
+        return ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip;
+    }
+}
 
 /// <summary>
 /// CSRF'ye ikinci kalkan (ilki SameSite=Strict çerez). Durum değiştiren her /api isteği

@@ -137,6 +137,9 @@ public static class SchemaUpgrade
         if (!HasColumn(db, "Exercises", "CreatedAt"))
             db.Database.ExecuteSqlRaw("ALTER TABLE \"Exercises\" ADD COLUMN \"CreatedAt\" TEXT NULL;");
 
+        if (!HasColumn(db, "Users", "LastFailedLoginAt"))
+            db.Database.ExecuteSqlRaw("ALTER TABLE \"Users\" ADD COLUMN \"LastFailedLoginAt\" TEXT NULL;");
+
         foreach (var table in OwnedTables)
         {
             if (!HasColumn(db, table, "UserId"))

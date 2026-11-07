@@ -10,7 +10,7 @@ namespace FitTrack.API.Security;
 /// E-posta ile sıfırlama yok. Parolası unutulan hesap, sunucu sahibinin ortam değişkeniyle açılır:
 /// <c>FITTRACK_RESET_EMAIL</c> + <c>FITTRACK_RESET_PASSWORD</c> ayarlanıp servis yeniden başlatılır.
 /// Değişkenlere yalnız Railway projesinin sahibi erişebilir. Parola zaten o değerse hiçbir şey
-/// yapılmaz — değişkenler unutulup kalırsa her yeniden başlatmada oturumlar düşmesin diye.
+/// yapılmaz — değişkenler unutulup kalırsa her yeniden başlatmada oturumlar ve Telegram bağlantısı düşmesin diye.
 /// </summary>
 public static class PasswordReset
 {
@@ -47,8 +47,10 @@ public static class PasswordReset
 
         user.PasswordHash = hasher.HashPassword(user, password);
         user.FailedLoginCount = 0;
+        user.LastFailedLoginAt = null;
         user.LockoutUntil = null;
         user.SessionVersion++; // eski oturumlar düşsün
+        user.DropTelegramLink(); // parolayla birlikte Telegram erişimi de düşer
         db.SaveChanges();
         log.LogWarning("Parola sıfırlandı: {UserId}. FITTRACK_RESET_* değişkenlerini şimdi sil.", user.Id);
     }

@@ -12,7 +12,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { accountApi, apiError, type Session } from "../api/auth";
+import { accountApi, apiError, type Session, type TelegramStatus } from "../api/auth";
 import { FieldError, FormError } from "../components/AuthScreen";
 import { SectionHeader } from "../components/SectionHeader";
 import { Button, Card, Chip, EmptyState, Input, ListSkeleton } from "../components/ui";
@@ -284,6 +284,7 @@ const passwordSchema = z
   .refine((v) => v.next === v.confirm, { path: ["confirm"], message: "Parolalar eşleşmiyor." });
 
 function PasswordCard() {
+  const qc = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState("");
   const { register, handleSubmit, reset, formState } = useForm<z.infer<typeof passwordSchema>>({ resolver: zodResolver(passwordSchema) });
@@ -291,9 +292,16 @@ function PasswordCard() {
   const onSubmit = handleSubmit(async (v) => {
     setError("");
     try {
+      const telegramLinked = qc.getQueryData<TelegramStatus>(["account", "telegram"])?.linked;
       await accountApi.changePassword(v.current, v.next);
       reset();
-      toast.success("Parola değişti. Diğer cihazlardaki oturumlar kapatıldı.");
+      // Sunucu Telegram bağlantısını da düşürdü: kart eski durumu göstermesin.
+      void qc.invalidateQueries({ queryKey: ["account", "telegram"] });
+      toast.success(
+        telegramLinked
+          ? "Parola değişti. Diğer cihazlar kapatıldı, Telegram bağlantısı kaldırıldı. Yeniden bağlayabilirsin."
+          : "Parola değişti. Diğer cihazlardaki oturumlar kapatıldı."
+      );
     } catch (err) {
       setError(apiError(err, "Parola değiştirilemedi."));
     }
@@ -350,7 +358,7 @@ function DangerCard() {
       <CardTitle icon={LogOut}>Oturumlar ve hesap</CardTitle>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-neutral-400">Bu dahil tüm cihazlardan çık.</p>
+          <p className="text-sm text-neutral-400">Bu dahil tüm cihazlardan çık. Telegram bağlantısı da kaldırılır.</p>
           <Button variant="soft" disabled={logoutAll.isPending} onClick={() => logoutAll.mutate()} className="min-h-11">Her yerden çık</Button>
         </div>
 

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using FitTrack.API.Data;
 using FitTrack.API.Models;
 using FitTrack.API.Security;
@@ -13,6 +14,7 @@ namespace FitTrack.API.Services;
 /// Telegram polling bot — ince sarmalayıcı, koçun beyni <see cref="CoachService"/>'te.
 /// Her sohbet tek bir hesaba bağlıdır. Bağlama web'den alınan tek kullanımlık kodla yapılır
 /// (<c>/link KOD</c>); bağlı olmayan sohbet hiçbir veriye dokunamaz.
+/// Mesajlar sohbet başına sırayla, sohbetler arasında paralel işlenir; her iş kendi DI kapsamındadır.
 /// </summary>
 public class TelegramBotService : BackgroundService
 {
@@ -30,11 +32,37 @@ public class TelegramBotService : BackgroundService
     private static readonly TimeSpan LinkAttemptWindow = TimeSpan.FromMinutes(15);
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // karışan karakterler yok
 
+    internal const int MaxConcurrentCoachCalls = 4;
+    internal const int MaxMessagesPerMinute = 10;
+    internal const int MaxPendingPerChat = 20;
+    private static readonly TimeSpan MinuteWindow = TimeSpan.FromMinutes(1);
+    private const string TooFastWarning = "Çok hızlı yazıyorsun. Bir dakika bekleyip tekrar yaz.";
+    private const string QueueFullWarning = "Bekleyen mesajın çok. Koç bunları bitirsin, sonra tekrar yaz.";
+
     private readonly IServiceScopeFactory _scope;
     private readonly IHttpClientFactory _http;
     private readonly IConfiguration _cfg;
     private readonly ILogger<TelegramBotService> _log;
     private readonly ConcurrentDictionary<long, (int Count, DateTime WindowStart)> _linkAttempts = new();
+
+    private readonly SemaphoreSlim _coachSlots = new(MaxConcurrentCoachCalls);
+    private readonly SemaphoreSlim _linkGate = new(1); // kod tek kullanımlık kalsın: sohbetler artık paralel
+    private readonly object _queueLock = new();
+    private readonly Dictionary<long, ChatQueue> _chats = new();
+    private readonly HashSet<Task> _running = new();
+    private DateTime _lastSweep = DateTime.MinValue;
+
+    /// <summary>Dakikalık pencerelerin saati; testler ilerletir.</summary>
+    internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
+    private sealed class ChatQueue
+    {
+        public readonly Queue<JsonNode?> Pending = new();
+        public bool Running;
+        public int InWindow;
+        public DateTime WindowStart;
+        public DateTime? LastWarnedAt;
+    }
 
     public TelegramBotService(IServiceScopeFactory scope, IHttpClientFactory http, IConfiguration cfg, ILogger<TelegramBotService> log)
     {
@@ -83,12 +111,24 @@ public class TelegramBotService : BackgroundService
         }
 
         // Acknowledge any pending updates so we start fresh.
+        // Kuyruk bellekte: yeniden başlatmada bekleyenler de böylece düşer, hiçbir güncelleme iki kez işlenmez.
         try { await _http.CreateClient().GetAsync($"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true", ct); }
         catch { }
 
+        _log.LogInformation("Telegram yoklaması başladı.");
+
+        try { await PollAsync(token, ct); }
+        finally
+        {
+            // Kapanışta süren işler iptal edilir, kuyruktakiler alınmaz. Kapsamlar kapanmadan önce hepsi bitsin.
+            await WhenIdleAsync();
+        }
+    }
+
+    private async Task PollAsync(string token, CancellationToken ct)
+    {
         long lastId = 0;
         var conflicts = 0;
-        _log.LogInformation("Telegram yoklaması başladı.");
 
         while (!ct.IsCancellationRequested)
         {
@@ -111,7 +151,7 @@ public class TelegramBotService : BackgroundService
                         conflicts++;
                         _log.LogWarning(
                             "Telegram 409 Conflict — başka bir örnek aynı botu yokluyor ({N}/{Max}). {Desc}",
-                            conflicts, MaxConsecutiveConflicts, (string?)root?["description"]);
+                            conflicts, MaxConsecutiveConflicts, Scrub((string?)root?["description"], token));
 
                         if (conflicts >= MaxConsecutiveConflicts)
                         {
@@ -136,19 +176,135 @@ public class TelegramBotService : BackgroundService
 
                 foreach (var upd in updates)
                 {
+                    // Offset kuyruğa alınır alınmaz ilerler: bir sonraki yoklama bu güncellemeyi Telegram'a
+                    // onaylar. Yoklama işi beklemez; aynı güncelleme ikinci kez gelirse işlenmez.
                     var updateId = (long?)upd?["update_id"] ?? 0;
-                    if (updateId > lastId) lastId = updateId;
+                    if (updateId <= lastId) continue;
+                    lastId = updateId;
 
-                    try { await HandleUpdate(token, upd, ct); }
-                    catch (Exception ex) { _log.LogError(ex, "Error handling update {Id}", updateId); }
+                    try { Enqueue(token, upd, ct); }
+                    catch (Exception ex) { _log.LogError("Error handling update {Id}: {Error}", updateId, Scrub(ex.ToString(), token)); }
                 }
             }
             catch (TaskCanceledException) { break; }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "Polling error. Retrying in 5s...");
+                _log.LogWarning("Polling error: {Error}. Retrying in 5s...", Scrub(ex.ToString(), token));
                 await Task.Delay(5000, ct);
             }
+        }
+    }
+
+    /// <summary>
+    /// Bot token'ı yalnız Telegram URL'sinde durur; istisna metni ya da hata açıklaması onu taşıyabilir.
+    /// Log'a giden her metin buradan geçer.
+    /// </summary>
+    internal static string Scrub(string? text, string token)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        if (token.Length > 0) text = text.Replace(token, "***");
+        return Regex.Replace(text, @"api\.telegram\.org/\S*", "api.telegram.org/***");
+    }
+
+    /// <summary>
+    /// Güncellemeyi sohbetin kuyruğuna alır ve hemen döner. Sohbet başına dakikada
+    /// <see cref="MaxMessagesPerMinute"/> mesaj ve <see cref="MaxPendingPerChat"/> bekleyen; aşılınca mesaj
+    /// atılır, kullanıcıya dakikada en çok bir uyarı gider. Bağlantı işlendiği anda okunur, kuyruğa alındığında değil.
+    /// </summary>
+    internal void Enqueue(string token, JsonNode? upd, CancellationToken ct)
+    {
+        var msg = upd?["message"];
+        var chatId = (long?)msg?["chat"]?["id"];
+        if (chatId is null || string.IsNullOrWhiteSpace((string?)msg?["text"])) return;
+
+        ChatQueue queue;
+        string? warning = null;
+        var start = false;
+        lock (_queueLock)
+        {
+            var now = Clock();
+            SweepIdleChats(now);
+            if (!_chats.TryGetValue(chatId.Value, out queue!))
+                _chats[chatId.Value] = queue = new ChatQueue { WindowStart = now };
+            if (now - queue.WindowStart >= MinuteWindow)
+            {
+                queue.WindowStart = now;
+                queue.InWindow = 0;
+            }
+
+            if (queue.InWindow >= MaxMessagesPerMinute) warning = TooFastWarning;
+            else if (queue.Pending.Count >= MaxPendingPerChat) warning = QueueFullWarning;
+            else
+            {
+                queue.InWindow++;
+                queue.Pending.Enqueue(upd);
+                if (!queue.Running) queue.Running = start = true;
+            }
+
+            if (warning is not null)
+            {
+                if (queue.LastWarnedAt is { } warned && now - warned < MinuteWindow) warning = null;
+                else queue.LastWarnedAt = now;
+            }
+        }
+
+        if (start) Track(Task.Run(() => DrainAsync(token, queue, ct), CancellationToken.None));
+        if (warning is not null) Track(SendTelegram(token, chatId.Value, warning));
+    }
+
+    private async Task DrainAsync(string token, ChatQueue queue, CancellationToken ct)
+    {
+        while (true)
+        {
+            JsonNode? upd;
+            lock (_queueLock)
+            {
+                if (ct.IsCancellationRequested) queue.Pending.Clear();
+                if (queue.Pending.Count == 0)
+                {
+                    queue.Running = false;
+                    return;
+                }
+                upd = queue.Pending.Dequeue();
+            }
+
+            try { await HandleUpdate(token, upd, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { /* kapanış: döngü kuyruğu boşaltır */ }
+            catch (Exception ex)
+            {
+                _log.LogError("Error handling update {Id}: {Error}", (long?)upd?["update_id"] ?? 0, Scrub(ex.ToString(), token));
+            }
+        }
+    }
+
+    private void SweepIdleChats(DateTime now)
+    {
+        if (now - _lastSweep < MinuteWindow) return;
+        _lastSweep = now;
+        foreach (var (id, q) in _chats)
+        {
+            var warningActive = q.LastWarnedAt is { } warned && now - warned < MinuteWindow;
+            if (!q.Running && q.Pending.Count == 0 && now - q.WindowStart >= MinuteWindow && !warningActive)
+                _chats.Remove(id);
+        }
+    }
+
+    private void Track(Task task)
+    {
+        lock (_queueLock) _running.Add(task);
+        task.ContinueWith(t => { lock (_queueLock) _running.Remove(t); }, TaskScheduler.Default);
+    }
+
+    /// <summary>Kuyruktaki ve süren tüm işler bitene kadar bekler.</summary>
+    internal async Task WhenIdleAsync()
+    {
+        while (true)
+        {
+            Task[] running;
+            lock (_queueLock) running = _running.ToArray();
+            if (running.Length == 0) return;
+            await Task.WhenAll(running);
+            await Task.Yield(); // Track'in temizliği de çalışsın
         }
     }
 
@@ -240,7 +396,12 @@ public class TelegramBotService : BackgroundService
         // TakeLast ilk mesajı assistant yapabilir; Anthropic konuşmanın user ile başlamasını ister.
         while (messages.Count > 0 && (string?)messages[0]?["role"] != "user") messages.RemoveAt(0);
 
-        var result = await coach.ChatAsync(messages, ct: ct);
+        // Bir çağrı dakikalar sürebilir: yuva yalnız AI çağrısını sınırlar, diğer sohbetlerin kayıt ve komutlarını değil.
+        CoachResult result;
+        await _coachSlots.WaitAsync(ct);
+        try { result = await coach.ChatAsync(messages, ct: ct); }
+        finally { _coachSlots.Release(); }
+
         if (!result.Ok)
         {
             await SendTelegram(token, chatId.Value, result.KeyRejected
@@ -271,23 +432,32 @@ public class TelegramBotService : BackgroundService
         }
 
         var hash = HashLinkCode(code);
-        var target = await db.Users.FirstOrDefaultAsync(u =>
-            u.TelegramLinkCodeHash == hash && u.TelegramLinkCodeExpiresAt != null && u.TelegramLinkCodeExpiresAt > now, ct);
+        User? target;
+        await _linkGate.WaitAsync(ct);
+        try
+        {
+            target = await db.Users.FirstOrDefaultAsync(u =>
+                u.TelegramLinkCodeHash == hash && u.TelegramLinkCodeExpiresAt != null && u.TelegramLinkCodeExpiresAt > now, ct);
+            if (target is not null)
+            {
+                // Bu sohbet başka hesaba bağlıysa önce oradan çöz — bir sohbet tek hesaba bakar.
+                var previous = await db.Users.Where(u => u.TelegramChatId == chatId && u.Id != target.Id).ToListAsync(ct);
+                foreach (var p in previous) p.TelegramChatId = null;
+                await db.SaveChangesAsync(ct);
+
+                target.TelegramChatId = chatId;
+                target.TelegramLinkCodeHash = null; // tek kullanımlık
+                target.TelegramLinkCodeExpiresAt = null;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+        finally { _linkGate.Release(); }
+
         if (target is null)
         {
             await SendTelegram(token, chatId, "Kod geçersiz ya da süresi dolmuş. Web'den yeni kod al.");
             return;
         }
-
-        // Bu sohbet başka hesaba bağlıysa önce oradan çöz — bir sohbet tek hesaba bakar.
-        var previous = await db.Users.Where(u => u.TelegramChatId == chatId && u.Id != target.Id).ToListAsync(ct);
-        foreach (var p in previous) p.TelegramChatId = null;
-        await db.SaveChangesAsync(ct);
-
-        target.TelegramChatId = chatId;
-        target.TelegramLinkCodeHash = null; // tek kullanımlık
-        target.TelegramLinkCodeExpiresAt = null;
-        await db.SaveChangesAsync(ct);
         _linkAttempts.TryRemove(chatId, out _);
 
         _log.LogInformation("Telegram sohbeti hesaba bağlandı: {UserId}", target.Id);

@@ -29,8 +29,14 @@ RUN apt-get update \
  && echo $TZ > /etc/timezone \
  && rm -rf /var/lib/apt/lists/*
 
+# Uygulama root olarak çalışmaz. Düz `USER app` yazılamaz: Railway volume'u root sahipli bağlar, veritabanı
+# açılmaz. Konteyner root başlar, /var/data'yı devreder, sonra yetkisini bırakır. İmaj bu araçları
+# taşımayı bırakırsa derleme burada kırılsın, canlıda değil.
+RUN command -v setpriv && id app
+
 WORKDIR /app
 COPY --from=build /app/out .
 COPY --from=client /client/dist ./wwwroot
 EXPOSE 5000
-CMD ["dotnet", "FitTrack.API.dll"]
+# Satır içi: depo Windows'ta düzenleniyor, ayrı .sh dosyasında CRLF shebang'i bozar.
+CMD ["sh", "-c", "if [ -d /var/data ]; then chown -R app:app /var/data; fi; export HOME=/home/app; exec setpriv --reuid=app --regid=app --init-groups --no-new-privs dotnet FitTrack.API.dll"]

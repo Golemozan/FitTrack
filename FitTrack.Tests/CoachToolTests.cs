@@ -30,6 +30,21 @@ public class CoachToolTests : IClassFixture<TestApp>
         return await scope.ServiceProvider.GetRequiredService<CoachService>().BuildSystemPromptAsync();
     }
 
+    /// <summary>Koçun tarih alan araçları da uç tarihte patlamaz: AddDays taşması yerine anlaşılır hata, kayıt yok.</summary>
+    [Fact]
+    public async Task Date_tools_reject_out_of_window_dates()
+    {
+        var (_, a, _, _) = await _app.RegisterAsync("Tarih");
+        var list = await Tool(a, "list_meals", new JsonObject { ["date"] = "9999-12-31" });
+        Assert.True(list.Error);
+        Assert.Contains("Tarih geçersiz", list.Text);
+
+        var weight = await Tool(a, "log_weight", new JsonObject { ["weightKg"] = 80, ["date"] = "9999-12-31" });
+        Assert.True(weight.Error);
+        Assert.Contains("Tarih geçersiz", weight.Text);
+        Assert.Equal(0, _app.Scalar("SELECT COUNT(*) FROM WeightLogs WHERE UserId=$u", ("$u", TestApp.SqlGuid(a))));
+    }
+
     [Fact]
     public async Task Meal_tools_are_scoped()
     {

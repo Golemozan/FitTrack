@@ -46,7 +46,7 @@ public class PasswordResetTests : IClassFixture<TestApp>
         for (var i = 0; i < 30; i++)
         {
             var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login") { Content = JsonContent.Create(new { email, password = "yanlis-parola-000" }) };
-            req.Headers.Add("X-Forwarded-For", $"198.51.100.{i + 1}");
+            req.Headers.Add(TestApp.TestClientIpHeader, $"198.51.100.{i + 1}");
             await _app.Browser().SendAsync(req);
         }
         Assert.Equal(HttpStatusCode.Unauthorized, (await Login(email, password)).StatusCode);
@@ -65,6 +65,48 @@ public class PasswordResetTests : IClassFixture<TestApp>
 
         Reset(email, "ayni-kalan-parola-1"); // değişken unutuldu, servis yeniden başladı
         Assert.Equal(HttpStatusCode.OK, (await fresh.GetAsync("/api/auth/me")).StatusCode);
+    }
+
+    private const long Chat = 555_001;
+
+    private void LinkTelegram(Guid userId, long chat, string? codeHash = "BEKLEYEN")
+    {
+        _app.Exec("UPDATE Users SET TelegramChatId=$c, TelegramLinkCodeHash=$h, TelegramLinkCodeExpiresAt='2999-01-01 00:00:00' WHERE Id=$u",
+            ("$c", chat), ("$h", (object?)codeHash ?? DBNull.Value), ("$u", TestApp.SqlGuid(userId)));
+    }
+
+    private long TelegramFieldsLeft(Guid userId) => _app.Scalar(
+        "SELECT COUNT(*) FROM Users WHERE Id=$u AND (TelegramChatId IS NOT NULL OR TelegramLinkCodeHash IS NOT NULL OR TelegramLinkCodeExpiresAt IS NOT NULL)",
+        ("$u", TestApp.SqlGuid(userId)));
+
+    [Fact]
+    public async Task Reset_drops_telegram_link_every_time_it_changes_the_password()
+    {
+        var (_, id, email, _) = await _app.RegisterAsync("TeleReset");
+        LinkTelegram(id, Chat);
+        Reset(email, "ilk-sifirlama-parola-3");
+        Assert.Equal(0, TelegramFieldsLeft(id));
+
+        // Değişkenler silinmedi, kullanıcı parolasını değiştirip yeniden bağlandı, servis yeniden başladı:
+        // sıfırlama tekrar çalışır ve aynı sonucu verir.
+        var login = _app.Browser();
+        await login.PostAsJsonAsync("/api/auth/login", new { email, password = "ilk-sifirlama-parola-3" });
+        Assert.Equal(HttpStatusCode.NoContent, (await login.PostAsJsonAsync("/api/account/password",
+            new { currentPassword = "ilk-sifirlama-parola-3", newPassword = "kullanicinin-parolasi-8" })).StatusCode);
+        LinkTelegram(id, Chat + 1);
+        Reset(email, "ilk-sifirlama-parola-3");
+        Assert.Equal(0, TelegramFieldsLeft(id));
+    }
+
+    /// <summary>Parola zaten env değerindeyse sıfırlama yapılmaz: unutulan değişken her deploy'da bağlantıyı koparmasın.</summary>
+    [Fact]
+    public async Task Forgotten_reset_variables_keep_a_relinked_chat()
+    {
+        var (_, id, email, _) = await _app.RegisterAsync("TeleKeep");
+        Reset(email, "kalici-parola-degeri-5");
+        LinkTelegram(id, Chat + 2, codeHash: null);
+        Reset(email, "kalici-parola-degeri-5");
+        Assert.Equal(Chat + 2, _app.Scalar("SELECT TelegramChatId FROM Users WHERE Id=$u", ("$u", TestApp.SqlGuid(id))));
     }
 
     [Fact]
